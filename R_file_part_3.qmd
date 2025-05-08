@@ -1,0 +1,1203 @@
+---
+title: "Notes"
+author: "Annunay Pandey"
+affiliation: "Institute of chemical techonolgy"
+format: 
+  html:
+    fig_caption: true
+    toc: true          # Enables the Table of Contents in HTML output
+    toc-depth: 4       # Sets the depth of headers to include in the TOC (2 for H2, 3 for H3)
+    toc-location: left # Sets TOC position to the left; you can use "right" if preferred
+    number-sections: true
+---
+
+
+#south west garo hills 
+
+stationary and increasing trend
+
+```{r, fig.width=8, fig.height=10}
+
+library(extRemes)
+extreme_data_by_district = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_district_for_R.csv")
+
+
+
+
+# Prepare South West Garo Hills data
+district_max <- data.frame(
+  Year = extreme_data_by_district$Year,
+  annual_max = extreme_data_by_district$South.West.Garo.Hills
+)
+
+# Create transformed year variable (optional for trend analysis)
+district_max$year_transformed <- district_max$Year - 1900  # Centers at 1900
+
+# Basic Extreme Value Analysis (Stationary model)
+model_1 <- fevd(annual_max, data = district_max)
+
+
+# Non-stationary model (if you suspect trends)
+model_2 <- fevd(annual_max, data = district_max, type = "Gumbel")
+
+# Compare models
+lr.test(model_1, model_2)  # Likelihood ratio test
+
+print("model 1 is better")
+
+model_3 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed)
+
+
+lr.test(model_3, model_1)  # Likelihood ratio test
+
+print("model 1 is sufficient")
+
+
+
+
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- return.level(model_1, return.period = t, do.ci = TRUE)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      District= "South West Garo Hills",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result[2],
+      Standard_Error = "",
+      CI_Lower = result[1],
+      CI_Upper = result[3]
+    ))
+  }
+}
+
+
+print(results_df)
+# existing_data <- read.csv("return_level_result_for_district_meghalaya.csv")
+# 
+# print(existing_data)
+# updated_data = rbind(existing_data, results_df)
+# print(updated_data)
+
+write.csv(results_df, "return_level_result_for_district_meghalaya.csv", row.names= FALSE)
+
+# # Print the difference in return levels
+#print(results_df)
+
+
+```
+
+# West Garo Hills
+
+stationary and increasing 
+
+
+```{r, fig.width=8, fig.height=10}
+
+library(extRemes)
+extreme_data_by_district = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_district_for_R.csv")
+
+
+
+
+# Prepare South West Garo Hills data
+district_max <- data.frame(
+  Year = extreme_data_by_district$Year,
+  annual_max = extreme_data_by_district$West.Garo.Hills
+)
+
+# Create transformed year variable (optional for trend analysis)
+district_max$year_transformed <- district_max$Year - 1900  # Centers at 1900
+
+# Basic Extreme Value Analysis (Stationary model)
+model_1 <- fevd(annual_max, data = district_max)
+
+
+# Non-stationary model (if you suspect trends)
+model_2 <- fevd(annual_max, data = district_max, type = "Gumbel")
+
+# Compare models
+lr.test(model_1, model_2)  # Likelihood ratio test
+
+print("model 1 is better")
+
+model_3 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed)
+
+
+lr.test(model_3, model_1)  # Likelihood ratio test
+
+print("model 1 is sufficient")
+
+
+
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- return.level(model_1, return.period = t, do.ci = TRUE)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      District= "West Garo Hills",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result[2],
+      Standard_Error = "",
+      CI_Lower = result[1],
+      CI_Upper = result[3]
+    ))
+  }
+}
+
+
+print(results_df)
+existing_data <- read.csv("return_level_result_for_district_meghalaya.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_result_for_district_meghalaya.csv", row.names= FALSE)
+
+
+
+
+```
+
+#South Garo Hills 
+non statinary  and increasing 
+
+
+```{r, fig.width=8, fig.height=10}
+
+library(extRemes)
+extreme_data_by_district = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_district_for_R.csv")
+
+
+
+
+# Prepare South West Garo Hills data
+district_max <- data.frame(
+  Year = extreme_data_by_district$Year,
+  annual_max = extreme_data_by_district$South.Garo.Hills
+)
+
+# Create transformed year variable (optional for trend analysis)
+district_max$year_transformed <- district_max$Year - 1900  # Centers at 1900
+
+# Basic Extreme Value Analysis (Stationary model)
+model_1 <- fevd(annual_max, data = district_max)
+
+
+# Non-stationary model (if you suspect trends)
+model_2 <- fevd(annual_max, data = district_max, type = "Gumbel")
+
+# Compare models
+lr.test(model_1, model_2)  # Likelihood ratio test
+
+print("model 1 is better")
+
+model_3 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed)
+
+
+lr.test(model_3, model_1)  # Likelihood ratio test
+
+print("model 3 is better")
+
+
+model_4 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed + I(year_transformed^2))
+
+
+lr.test(model_4, model_3)  # Likelihood ratio test
+
+print("model 4 is better") #also checked with cubic location parameter 
+
+
+model_5 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed + I(year_transformed^2), scale.fun = ~year_transformed, use.phi = TRUE)
+
+lr.test(model_4, model_5) 
+
+print("model 5 is better")
+
+
+model_6 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed + I(year_transformed^2), scale.fun = ~year_transformed + I(year_transformed^2), use.phi = TRUE)
+
+
+lr.test(model_6, model_5)
+
+print("Hence model 5 is best")       
+
+
+        
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 6)  # 5 columns for 5 parameters
+  m[, 2] <- years  # Set the second column to the years
+  m[, 3] <- years
+  m[, 5] <- years
+  
+  
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_5, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_5, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      District = "South Garo Hills ",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+existing_data <- read.csv("return_level_result_for_district_meghalaya.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_result_for_district_meghalaya.csv", row.names= FALSE)
+
+
+
+```
+
+
+
+# East Garo Hills
+
+stationary and increasing 
+
+
+```{r, fig.width=8, fig.height=10}
+
+library(extRemes)
+extreme_data_by_district = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_district_for_R.csv")
+
+
+
+
+# Prepare South West Garo Hills data
+district_max <- data.frame(
+  Year = extreme_data_by_district$Year,
+  annual_max = extreme_data_by_district$East.Garo.Hills
+)
+
+# Create transformed year variable (optional for trend analysis)
+district_max$year_transformed <- district_max$Year - 1900  # Centers at 1900
+
+# Basic Extreme Value Analysis (Stationary model)
+model_1 <- fevd(annual_max, data = district_max)
+
+
+# Non-stationary model (if you suspect trends)
+model_2 <- fevd(annual_max, data = district_max, type = "Gumbel")
+
+# Compare models
+lr.test(model_1, model_2)  # Likelihood ratio test
+
+print("model 1 is better")
+
+model_3 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed)
+
+
+lr.test(model_3, model_1)  # Likelihood ratio test
+
+print("model 3 is better")
+
+model_4 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed + I(year_transformed^2))
+
+lr.test(model_3, model_4)  # Likelihood ratio test
+
+print("hence model 3 is selected")
+#since we want a simpler model we going with model 3 as there are not much differnet 
+
+
+
+       
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 4)  # 5 columns for 5 parameters
+  m[, 2] <- years  # Set the second column to the years
+
+  
+  
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_3, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_3, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      District = "East Garo Hills",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+existing_data <- read.csv("return_level_result_for_district_meghalaya.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_result_for_district_meghalaya.csv", row.names= FALSE)
+
+
+
+```
+
+# South West Khasi Hills
+
+non statinary  and increasing 
+
+
+```{r, fig.width=8, fig.height=10}
+
+library(extRemes)
+extreme_data_by_district = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_district_for_R.csv")
+
+
+
+
+# Prepare South West Garo Hills data
+district_max <- data.frame(
+  Year = extreme_data_by_district$Year,
+  annual_max = extreme_data_by_district$South.West.Khasi.Hills
+)
+
+# Create transformed year variable (optional for trend analysis)
+district_max$year_transformed <- district_max$Year - 1900  # Centers at 1900
+
+# Basic Extreme Value Analysis (Stationary model)
+model_1 <- fevd(annual_max, data = district_max)
+
+
+# Non-stationary model (if you suspect trends)
+model_2 <- fevd(annual_max, data = district_max, type = "Gumbel")
+
+# Compare models
+lr.test(model_1, model_2)  # Likelihood ratio test
+
+print("model 1 is better")
+
+model_3 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed)
+
+
+lr.test(model_3, model_1)  # Likelihood ratio test
+
+print("model 3 is better")
+
+
+model_4 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed + I(year_transformed^2))
+
+
+lr.test(model_4, model_3)  # Likelihood ratio test
+
+print("model 3 is better") 
+
+
+model_5 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed, scale.fun = ~year_transformed, use.phi = TRUE)
+
+lr.test(model_3, model_5) 
+
+print("model 5 is better")
+
+
+model_6 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed , scale.fun = ~year_transformed + I(year_transformed^2), use.phi = TRUE)
+
+
+lr.test(model_6, model_5)
+
+print("Hence model 5 is best")       
+
+
+        
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 5)  # 5 columns for 5 parameters
+  m[, 2] <- years  # Set the second column to the years
+  m[, 4] <- years
+  
+  
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_5, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_5, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      District = "South West Khasi Hills",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+existing_data <- read.csv("return_level_result_for_district_meghalaya.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_result_for_district_meghalaya.csv", row.names= FALSE)
+
+
+
+```
+
+# West Khasi Hills
+
+non stationary and increasing 
+
+
+```{r, fig.width=8, fig.height=10}
+
+library(extRemes)
+extreme_data_by_district = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_district_for_R.csv")
+
+
+
+
+# Prepare South West Garo Hills data
+district_max <- data.frame(
+  Year = extreme_data_by_district$Year,
+  annual_max = extreme_data_by_district$West.Khasi.Hills
+)
+
+# Create transformed year variable (optional for trend analysis)
+district_max$year_transformed <- district_max$Year - 1900  # Centers at 1900
+
+# Basic Extreme Value Analysis (Stationary model)
+model_1 <- fevd(annual_max, data = district_max)
+
+
+# Non-stationary model (if you suspect trends)
+model_2 <- fevd(annual_max, data = district_max, type = "Gumbel")
+
+# Compare models
+lr.test(model_1, model_2)  # Likelihood ratio test
+
+print("model 1 is better")
+
+model_3 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed)
+
+
+lr.test(model_3, model_1)  # Likelihood ratio test
+
+print("model 3 is better")
+
+
+model_4 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed + I(year_transformed^2))
+
+
+lr.test(model_4, model_3)  # Likelihood ratio test
+
+print("model 3 is better") 
+
+
+model_5 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed, scale.fun = ~year_transformed, use.phi = TRUE)
+
+lr.test(model_3, model_5) 
+
+print("model 5 is better")
+
+
+model_6 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed , scale.fun = ~year_transformed + I(year_transformed^2), use.phi = TRUE)
+
+
+lr.test(model_6, model_5)
+
+print("Hence model 5 is best")       
+
+
+        
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 5)  # 5 columns for 5 parameters
+  m[, 2] <- years  # Set the second column to the years
+  m[, 4] <- years
+  
+  
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_5, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_5, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      District = "West Khasi Hills",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+existing_data <- read.csv("return_level_result_for_district_meghalaya.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_result_for_district_meghalaya.csv", row.names= FALSE)
+
+
+
+```
+
+
+
+#East Khasi Hills
+
+non stationary and increasing 
+
+
+```{r, fig.width=8, fig.height=10}
+
+library(extRemes)
+extreme_data_by_district = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_district_for_R.csv")
+
+
+
+
+# Prepare South West Garo Hills data
+district_max <- data.frame(
+  Year = extreme_data_by_district$Year,
+  annual_max = extreme_data_by_district$East.Khasi.Hills
+)
+
+# Create transformed year variable (optional for trend analysis)
+district_max$year_transformed <- district_max$Year - 1900  # Centers at 1900
+
+# Basic Extreme Value Analysis (Stationary model)
+model_1 <- fevd(annual_max, data = district_max)
+
+
+# Non-stationary model (if you suspect trends)
+model_2 <- fevd(annual_max, data = district_max, type = "Gumbel")
+
+# Compare models
+lr.test(model_1, model_2)  # Likelihood ratio test
+
+print("model 1 is better")
+
+model_3 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed)
+
+
+lr.test(model_3, model_1)  # Likelihood ratio test
+
+print("model 1 is better")
+
+
+
+model_4 =  fevd(annual_max, data = district_max, scale.fun = ~year_transformed, use.phi = TRUE)
+
+lr.test(model_1, model_4) 
+
+plot(model_4)
+
+print("model 4 is better")
+
+
+model_5 =  fevd(annual_max, data = district_max, scale.fun = ~year_transformed + I(year_transformed^2), use.phi = TRUE)
+
+
+lr.test(model_5, model_4)
+
+print("Hence model 4 is best")       
+
+
+        
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 4)  # 5 columns for 5 parameters
+  m[, 3] <- years  # Set the second column to the years
+  
+  
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_4, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_4, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      District = "East Khasi Hills",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+existing_data <- read.csv("return_level_result_for_district_meghalaya.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_result_for_district_meghalaya.csv", row.names= FALSE)
+
+
+
+```
+
+# Eastern West Khasi Hills
+
+stationary and increasing trend
+
+```{r, fig.width=8, fig.height=10}
+
+library(extRemes)
+extreme_data_by_district = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_district_for_R.csv")
+
+
+
+
+# Prepare South West Garo Hills data
+district_max <- data.frame(
+  Year = extreme_data_by_district$Year,
+  annual_max = extreme_data_by_district$Eastern.West.Khasi.Hills
+)
+
+# Create transformed year variable (optional for trend analysis)
+district_max$year_transformed <- district_max$Year - 1900  # Centers at 1900
+
+# Basic Extreme Value Analysis (Stationary model)
+model_1 <- fevd(annual_max, data = district_max)
+
+
+# Non-stationary model (if you suspect trends)
+model_2 <- fevd(annual_max, data = district_max, type = "Gumbel")
+
+# Compare models
+lr.test(model_1, model_2)  # Likelihood ratio test
+
+print("model 1 is better")
+
+model_3 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed)
+
+
+lr.test(model_3, model_1)  # Likelihood ratio test
+
+print("model 1 is sufficient")
+
+
+
+
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- return.level(model_1, return.period = t, do.ci = TRUE)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      District= "Eastern West Khasi Hills",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result[2],
+      Standard_Error = "",
+      CI_Lower = result[1],
+      CI_Upper = result[3]
+    ))
+  }
+}
+
+
+print(results_df)
+existing_data <- read.csv("return_level_result_for_district_meghalaya.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_result_for_district_meghalaya.csv", row.names= FALSE)
+
+# # Print the difference in return levels
+#print(results_df)
+
+
+```
+
+
+# Ri-Bhoi
+
+stationary and no trend
+
+
+```{r, fig.width=8, fig.height=10}
+
+library(extRemes)
+extreme_data_by_district = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_district_for_R.csv")
+
+
+
+
+# Prepare South West Garo Hills data
+district_max <- data.frame(
+  Year = extreme_data_by_district$Year,
+  annual_max = extreme_data_by_district$Ri.Bhoi
+)
+
+# Create transformed year variable (optional for trend analysis)
+district_max$year_transformed <- district_max$Year - 1900  # Centers at 1900
+
+# Basic Extreme Value Analysis (Stationary model)
+model_1 <- fevd(annual_max, data = district_max)
+
+
+# Non-stationary model (if you suspect trends)
+model_2 <- fevd(annual_max, data = district_max, type = "Gumbel")
+
+# Compare models
+lr.test(model_1, model_2)  # Likelihood ratio test
+
+print("model 1 is better")
+
+model_3 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed)
+
+
+lr.test(model_3, model_1)  # Likelihood ratio test
+
+print("model 1 is sufficient")
+
+
+
+
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- return.level(model_1, return.period = t, do.ci = TRUE)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      District= "Ri-Bhoi",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result[2],
+      Standard_Error = "",
+      CI_Lower = result[1],
+      CI_Upper = result[3]
+    ))
+  }
+}
+
+
+print(results_df)
+existing_data <- read.csv("return_level_result_for_district_meghalaya.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_result_for_district_meghalaya.csv", row.names= FALSE)
+
+# # Print the difference in return levels
+#print(results_df)
+
+
+```
+
+
+#West Jaintia Hills
+stationary and no trend
+
+
+```{r, fig.width=8, fig.height=10}
+
+library(extRemes)
+extreme_data_by_district = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_district_for_R.csv")
+
+
+
+
+# Prepare South West Garo Hills data
+district_max <- data.frame(
+  Year = extreme_data_by_district$Year,
+  annual_max = extreme_data_by_district$West.Jaintia.Hills
+)
+
+# Create transformed year variable (optional for trend analysis)
+district_max$year_transformed <- district_max$Year - 1900  # Centers at 1900
+
+# Basic Extreme Value Analysis (Stationary model)
+model_1 <- fevd(annual_max, data = district_max)
+
+
+# Non-stationary model (if you suspect trends)
+model_2 <- fevd(annual_max, data = district_max, type = "Gumbel")
+
+# Compare models
+lr.test(model_1, model_2)  # Likelihood ratio test
+
+print("model 1 is better")
+
+model_3 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed)
+
+
+lr.test(model_3, model_1)  # Likelihood ratio test
+
+print("model 1 is sufficient")
+
+
+
+
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- return.level(model_1, return.period = t, do.ci = TRUE)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      District= "West Jaintia Hills",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result[2],
+      Standard_Error = "",
+      CI_Lower = result[1],
+      CI_Upper = result[3]
+    ))
+  }
+}
+
+
+print(results_df)
+existing_data <- read.csv("return_level_result_for_district_meghalaya.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_result_for_district_meghalaya.csv", row.names= FALSE)
+
+# # Print the difference in return levels
+#print(results_df)
+
+
+```
+
+
+#East Jaintia Hills
+
+stationary and no trend
+
+
+```{r, fig.width=8, fig.height=10}
+
+library(extRemes)
+extreme_data_by_district = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_district_for_R.csv")
+
+
+
+
+# Prepare South West Garo Hills data
+district_max <- data.frame(
+  Year = extreme_data_by_district$Year,
+  annual_max = extreme_data_by_district$East.Jaintia.Hills
+)
+
+# Create transformed year variable (optional for trend analysis)
+district_max$year_transformed <- district_max$Year - 1900  # Centers at 1900
+
+# Basic Extreme Value Analysis (Stationary model)
+model_1 <- fevd(annual_max, data = district_max)
+
+
+# Non-stationary model (if you suspect trends)
+model_2 <- fevd(annual_max, data = district_max, type = "Gumbel")
+
+# Compare models
+lr.test(model_1, model_2)  # Likelihood ratio test
+
+print("model 1 is better")
+
+model_3 =  fevd(annual_max, data = district_max, 
+               location.fun = ~ year_transformed)
+
+
+lr.test(model_3, model_1)  # Likelihood ratio test
+
+print("model 1 is sufficient")
+
+
+
+
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- return.level(model_1, return.period = t, do.ci = TRUE)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      District= "East Jaintia Hills",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result[2],
+      Standard_Error = "",
+      CI_Lower = result[1],
+      CI_Upper = result[3]
+    ))
+  }
+}
+
+
+print(results_df)
+existing_data <- read.csv("return_level_result_for_district_meghalaya.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_result_for_district_meghalaya.csv", row.names= FALSE)
+
+# # Print the difference in return levels
+#print(results_df)
+
+
+```

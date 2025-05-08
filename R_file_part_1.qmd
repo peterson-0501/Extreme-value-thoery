@@ -1,0 +1,566 @@
+---
+title: "Extreme Value Theory"
+author: "Annunay Pandey"
+format: 
+  html:
+    fig_caption: true
+    toc: true          # Enables the Table of Contents in HTML output
+    toc-depth: 4       # Sets the depth of headers to include in the TOC (2 for H2, 3 for H3)
+    toc-location: left # Sets TOC position to the left; you can use "right" if preferred
+    number-sections: true
+---
+
+# overall GEV estimation of india rainfall
+
+## importing the data here and estimation for model 1
+
+
+
+
+
+
+
+
+```{r}
+library(evd)
+
+extreme_data_model_1 = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/Extreme_data_for_overall_india.csv")
+
+
+
+
+# Estimate the GEV parameters using MLE
+gev_params_1 = fgev(extreme_data_model_1$Annual_Max,corr = TRUE)
+
+# Display the estimated parameters
+print(gev_params_1)
+
+plot(gev_params_1)
+
+
+gev_params_1$var.cov
+```
+## Model 2
+
+for modelling non stationarity we will 
+```{r}
+# Estimate the GEV parameters using MLE
+gev_params_2 = fgev(extreme_data_model_1$Annual_Max,corr = TRUE, shape = 0)
+
+# Display the estimated parameters
+print(gev_params_2)
+
+plot(gev_params_2)
+
+confint(gev_params_2)
+library(extRemes)
+
+diff_pack= fevd(extreme_data_model_1$Annual_Max,data = extreme_data_model_1, covariate = list(mu = extreme_data_model_1$Year))
+summary(diff_pack)
+return.level(diff_pack,100,do.ci = TRUE)
+```
+
+## For model 3 
+
+mu = a + b x Year, sigma = constants and xi = constant
+
+
+```{r}
+
+library(evd)
+# Data preparation
+annual_max = extreme_data_model_1$Annual_Max
+yr = extreme_data_model_1$Year - min(extreme_data_model_1$Year)  # Centered years
+
+# Negative Log-Likelihood Function
+neg_log_lik = function(params, data, years) {
+  
+  # Extracting parameters
+  a = params[1]           # Intercept for location parameter
+  b = params[2]           # Slope for location parameter
+  sigma = params[3]       # Scale parameter
+  xi = params[4]          # Shape parameter
+  
+  # Prevent invalid parameter values
+  if (sigma <= 0) return(Inf)  # Scale must be positive
+  
+  # Calculate location parameter for each year
+  mu = a + (b * years)
+  
+  # Compute the negative log-likelihood
+  log_likelihood = sum(dgev(x = data, loc = mu, scale = sigma, shape = xi, log = TRUE))
+  
+  # Return negative log-likelihood (to minimize it)
+  return(-log_likelihood)
+}
+
+# Initial parameter guesses
+init_params = c(mean(annual_max), 0.1, sd(annual_max), 0.5)
+
+# Perform optimization
+fit = optim(par = init_params, 
+            fn = neg_log_lik, 
+            data = annual_max, 
+            years = yr, 
+            method = "BFGS", 
+            hessian = TRUE)
+
+# Output the fitted parameters
+fit$par
+```
+
+### probability plot for model 3 with confidence interval
+
+```{r}
+
+standard_zi = function(zt, yr, slope_of_mu, inter_of_mu, sigma, xi) {
+  
+  # Calculate mu based on the given year (yr)
+  mu = slope_of_mu + inter_of_mu * yr
+  
+  # Standardize zt
+  if (xi == 0) {
+    # Special case when xi = 0 (simplified formula)
+    zt_tilde = (zt - mu) / sigma
+  } else {
+    # General case when xi != 0
+    argument = 1 + xi * ((zt - mu) / sigma)
+    
+    # Ensure the argument for log is valid
+    if (argument <= 0) {
+      stop("Invalid inputs: 1 + xi * ((zt - mu) / sigma) must be > 0.")
+    }
+    
+    zt_tilde = (1 / xi) * log(argument)
+  }
+  
+  # Return the standardized value
+  return(zt_tilde)
+}
+```
+
+
+
+
+```{r}
+# Calculate empirical distribution function (EDF)
+empirical_values = numeric(length(annual_max))  # Initialize the vector
+
+for (i in 1:length(annual_max)) {
+  empirical_values[i] = i / (length(annual_max) + 1)  # EDF formula
+}
+
+# Extract model parameters from the fit object
+slope = fit$par[1]
+intercept = fit$par[2]
+sigma = fit$par[3]
+xi = fit$par[4]
+
+# Calculate years relative to the minimum year
+yr = extreme_data_model_1$Year - min(extreme_data_model_1$Year)
+
+# Initialize vector to store standardized values
+stand_values = numeric(length(annual_max))
+
+# Calculate standardized values using the 'standard_zi' function
+for (j in 1:length(annual_max)) {
+  stand_values[j] = standard_zi(annual_max[j], yr[j], slope, intercept, sigma, xi)
+}
+
+
+```
+
+
+Probablity plot 
+```{r}
+
+# this stand_values will follow standard gumbel distribution
+#exp(-exp(-stand_values)) gumble distibution with loc = 0 and scale = 1
+
+ordered_values= sort(stand_values)
+plot(empirical_values, pgumbel(ordered_values), 
+     xlab = "Empirical Values", ylab = "Theoretical Gumbel CDF",
+     main = "Probability Plot")
+abline(0, 1, col = "red")  # Add reference line
+
+```
+
+adding confidence interval 
+
+
+```{r}
+
+
+# to be done later after showing sir
+
+```
+### Qunatile plot for model 3
+
+```{r}
+
+
+theoretical_quantiles = -log(-log(empirical_values))
+plot(theoretical_quantiles, sort(stand_values), 
+     xlab = "Theoretical Quantiles", ylab = "Observed Quantiles",
+     main = "Quantile Plot")
+abline(0, 1, col = "red")  # Add reference line
+
+```
+### density plot for model 3
+
+
+```{r}
+
+# Compute the KDE
+kde = density(stand_values)
+
+# Plot the KDE
+plot(kde, main = "Kernel Density Estimate", 
+     xlab = "stand Values", ylab = "Density", col = "blue", lwd = 2)
+
+# Add a histogram for comparison
+hist(stand_values, probability = TRUE, col = rgb(0.8, 0.8, 0.8, 0.5), border = "white", add = TRUE)
+# Define the Gumbel PDF and overlay it
+
+curve(dgumbel(x), add = TRUE, col = "red", lwd = 2)
+
+
+```
+
+```{r}
+library(evd)
+# Compute the KDE
+kde <- density(stand_values)
+
+# Plot the KDE
+plot(kde, 
+     main = "Kernel Density Estimate with Gumbel PDF", 
+     xlab = "Standardized Values", 
+     ylab = "Density", 
+     col = "blue", 
+     lwd = 2)
+
+# Add a histogram for comparison
+hist(stand_values, 
+     probability = TRUE, 
+     col = rgb(0.8, 0.7, 0.8, 0.5), 
+     border = "white", 
+     add = TRUE)
+
+# Define the Gumbel PDF and overlay it
+curve(dgumbel(x), 
+      add = TRUE, 
+      col = "red", 
+      lwd = 2)
+
+# Add a legend to differentiate between KDE and Gumbel PDF
+legend("topright", 
+       legend = c("KDE", "Gumbel PDF", "Histogram"), 
+       col = c("blue", "red", rgb(0.8, 0.7, 0.8, 0.5)), 
+       lwd = c(2, 2, NA), 
+       fill = c(NA, NA, rgb(0.8, 0.7, 0.8, 0.5)),
+       border = NA)
+
+
+```
+
+
+
+### return level plot for model 3
+
+first have to find the return level with respect to gumble distribuiton 
+
+```{r}
+calculate_return_level = function(slope_of_mu, intercept_of_mu, sigma, xi, return_period, year) {
+  # Step 1: Compute p and zp_tilde (return level in transformed space)
+  p = 1 / return_period
+  zp_tilde = -log(-log(1 - p))
+  
+  # Step 2: Compute mu for the given year
+  mu = slope_of_mu + intercept_of_mu * year
+
+  zp = mu + (sigma / xi) * (exp(xi * zp_tilde) - 1)
+
+  return(zp)
+}
+
+
+calculate_variance_zp = function(sigma, xi, return_period, var_params,year) {
+  
+  p = 1 / return_period
+  yp = -log(1 - p)
+  
+  # Gradient (partial derivatives of z_p with respect to parameters)
+  d_zp_d_a  = 1 
+  d_zp_d_b = year 
+  d_zp_d_sigma = ifelse(xi != 0, -(1 / xi) * (1 - yp^(-xi)), -log(-log(1 - p))) 
+  d_zp_d_xi = ifelse(xi != 0, (sigma / xi^2) * (1 - yp^(-xi)) - sigma * xi^(-1) * yp^(-xi) * log(yp), 0)
+
+  # Gradient vector
+  gradient = matrix(c(1, year, d_zp_d_sigma, d_zp_d_xi),4,1,byrow = TRUE)
+  
+
+  # Variance of z_p using the delta method
+  variance_zp = as.numeric(t(gradient) %*% var_params %*% gradient)
+  return(variance_zp)
+}
+
+
+calculate_return_level(fit$par[1],fit$par[2],fit$par[3],fit$par[4],100,123)
+
+calculate_variance_zp(fit$par[3],fit$par[4],100,solve(fit$hessian), 123)
+
+
+
+```
+
+
+```{r}
+
+# because of the asymptotic normality of estimates we can create a confidence interval
+
+# as mu is dependent on time we do for some future year let say 2025
+
+# as here mu is dependent on time we cannot use to predict distant future are it will yeild unreaslitic result 
+
+# Predict year (scaled)
+predict_year =  1970 - min(extreme_data_model_1$Year)
+
+# Define return periods and confidence level
+return_period_vals = seq(1, 100, by = 0.2) # Return periods from 1 to 100
+alpha = 0.05                             # Confidence level (95%)
+
+# Initialize vectors to store results
+return_levels = numeric(length(return_period_vals))
+lower_bounds = numeric(length(return_period_vals))
+upper_bounds = numeric(length(return_period_vals))
+
+# Loop through return periods and calculate return levels and confidence intervals
+for (i in seq_along(return_period_vals)) {
+  return_period = return_period_vals[i]
+  
+  # Calculate return level (z_t)
+  z_t = calculate_return_level(fit$par[1], fit$par[2], fit$par[3], fit$par[4], return_period, predict_year)
+  
+  # Calculate variance of return level (var_z_t)
+  var_z_t = calculate_variance_zp(fit$par[3], fit$par[4], return_period, solve(fit$hessian), predict_year)
+  
+  # Confidence intervals
+  lower_bounds[i] = z_t - qnorm(1 - alpha / 2) * sqrt(var_z_t)
+  upper_bounds[i] = z_t + qnorm(1 - alpha / 2) * sqrt(var_z_t)
+  return_levels[i] = z_t
+}
+
+# Plot return levels with confidence intervals
+plot(return_period_vals, return_levels, type= 'l', col = "blue",
+     xlab = "Return Period", ylab = "Return Level",
+     main = "Return Levels with Confidence Intervals",ylim =c(400,1200))
+lines(return_period_vals, lower_bounds, col = "red", lty = 2) # Lower CI
+lines(return_period_vals, upper_bounds, col = "red", lty = 2) # Upper CI
+
+legend("topleft", legend = c("Return Levels", "Confidence Interval"), 
+       col = c("blue", "red"), lty = c(1, 2), lwd = c(2, 1))
+
+
+
+
+
+```
+
+
+# model 4
+
+
+mu = a + b x year and sigma = constant, xi = 0
+
+```{r}
+
+
+year_covariate = extreme_data_model_1$Year
+
+# Estimate the GEV parameters using MLE
+gev_params_4 = fgev(extreme_data_model_1$Annual_Max,nsloc= year_covariate ,corr = TRUE,shape = 0)
+
+# Display the estimated parameters
+print(gev_params_4)
+plot(gev_params_4,which = 1:4)
+#hist(extreme_data_model_1$Annual_Max,add = TRUE, probability = TRUE, breaks = 15)
+
+```
+#model 5
+
+mu = contant sigma= exp(a + b * year) xi = contanst
+
+```{r}
+library(extRemes)
+
+extreme_data_model_1$Year_transformed = extreme_data_model_1$Year - min(extreme_data_model_1$Year) + 1
+
+# Fit the GEV model with covariate-dependent scale parameter
+gev_params_5 = fevd(
+  extreme_data_model_1$Annual_Max,  # Response variable
+  extreme_data_model_1,             # Dataset
+  location.fun = ~1,                # Location parameter is constant
+  scale.fun = ~Year_transformed,
+  type = "Gumbel"# Scale parameter depends on year_covariate,  # Shape parameter is constant
+)
+
+gev_params_5$results$par
+plot(gev_params_5, rperiods = c(2, 5, 10))
+
+gev_params_5
+
+
+
+```
+
+```{r}
+
+m = matrix(1,3,3)
+#m[,2] = 12
+m[,3] = c(12,13,100)
+
+v = make.qcov(gev_params_5,vals = m,nr= 2)
+
+# Calculate difference in return levels
+return_levels_diff = return.level(
+  gev_params_5, 
+  return.period = 100, 
+  do.ci = TRUE, 
+  qcov = v,
+  #qcov.base = qcov.base
+)
+
+# Print the difference in return levels
+print(return_levels_diff)
+```
+## Return level calculation
+
+Let us create a return level table for Model 3. Since this model incorporates covariates, we need to compute return levels for each specific covariate value. For instance, for the year 2012, the 20-year return level is defined as the rainfall threshold that has a 5% chance of being exceeded in any given year. In other words, under the conditions specific to 2012—as captured by the model's covariates—there is a 1 in 20 probability of observing a rainfall event that meets or exceeds this threshold.
+
+
+<!-- this is doing using extRemes but the is some error in package -->
+```{r}
+#| echo: false
+
+# 
+# 
+# #matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter 
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                         #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# #m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+# 
+# # Calculate difference in return levels
+# return_levels_diff = return.level(model_3, return.period = 100)#, do.ci = FALSE, qcov = v)
+#   #qcov.base = qcov.bas)
+# 
+# # Print the difference in return levels
+# print(return_levels_diff)
+# 
+```
+
+
+<!-- now using evd package to get the return level,  -->
+
+```{r}
+#| echo:false
+
+fit_evd_package_model_3 = fgev(extreme_data$Annual_Max, nsloc = data.frame(trend = extreme_data$Year_transformed ), shape =0)
+
+
+#plot(fit_evd_package_model_3)
+
+```
+
+
+```{r}
+
+#| echo:false
+
+# Specify the return period and calculate the probability
+T = 100
+p = 1 - 1/T  # For T = 100, p = 0.99
+
+# Specify the trend value for which you want to calculate the return level
+x0 = 123 # year 2023
+
+# Calculate the location parameter at x0
+mu_x0 = fit_evd_package_model_3$estimate[1] + fit_evd_package_model_3$estimate[2] * x0
+
+# Now calculate the return level using qevd
+return_level = qgumbel(p,
+                     loc = mu_x0,
+                     scale = fit_evd_package_model_3$estimate[3])
+print(return_level)
+```
+
+```{r}
+
+#| echo:false
+
+T = 100
+p = 1 - 1/T 
+
+year  = 123
+
+mu = model_3$results$par[1] + model_3$results$par[2] * year
+
+return_level_extremes = qevd(p, loc= mu, scale = model_3$results$par[3],shape = 0, type = "Gumbel")
+
+
+```
+
+```{r}
+#delta method for the estimating the variance
+
+#as we have selected the model 3.
+
+# it is gumble distribuition with covariat as year 
+
+
+# extRems give the hessian matrix 
+# evd gives variance cov variance matrix 
+
+# now in model 3 we have 
+
+```
+
+```{r}
+#| echo: false
+gev_likelihood <- function(params, data) {
+  mu <- params[1]   # Location
+  sigma <- params[2] # Scale
+  xi <- params[3]    # Shape
+  
+  if (sigma <= 0) return(Inf)  # Avoid negative scale values
+  
+  z <- (data - mu) / sigma
+  t <- 1 + xi * z
+  
+  # Ensure valid values for log(t)
+  if (any(t <= 0)) return(Inf)
+  
+  if (abs(xi) < 1e-6) {
+    log_likelihood <- -log(sigma) - z - exp(-z)
+  } else {
+    log_likelihood <- -log(sigma) - (1 + 1/xi) * log(t) - t^(-1/xi)
+  }
+  
+  return(-sum(log_likelihood))  # Negative log-likelihood for minimization
+}
+
+# Example usage
+set.seed(123)
+data <- annual_max
+params_init <- c(mean(annual_max), 80, 0.2)  
+
+fit <- optim(params_init, gev_likelihood, data = data, method = "BFGS")
+
+print(fit$par)  # Estimated parameters
+
+fit
+```

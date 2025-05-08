@@ -1,0 +1,6500 @@
+---
+title: "Notes"
+author: "Annunay Pandey"
+affiliation: "Institute of chemical techonolgy"
+format: 
+  html:
+    fig_caption: true
+    toc: true          # Enables the Table of Contents in HTML output
+    toc-depth: 4       # Sets the depth of headers to include in the TOC (2 for H2, 3 for H3)
+    toc-location: left # Sets TOC position to the left; you can use "right" if preferred
+    number-sections: true
+---
+
+# 1. for maharashtra
+
+After performing a stationarity analysis, we found that the data for Gujarat is stationary, indicating no significant changes in statistical properties over time. However, the Mann-Kendall test detected an increasing trend. so might need to add the time dependent covaraite only to the location parameter
+
+```{r}
+library(extRemes)
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+
+extreme_data_by_state
+
+```
+
+
+```{r}
+# Filter the data for maharashtra using base R
+maharashtra_max = extreme_data_by_state[extreme_data_by_state$state == "Maharashtra", ]
+maharashtra_max["year_transformed"] = maharashtra_max["year"] - 1900 # min of year +1 
+
+```
+
+before fitting the model one we will check the stationarity of the model (done in jupyter lab check the maharashtra section), ADF test say it is staionary, but man kendel test suggest that there is a increasing trend, means there can time dependent on location parameter
+
+##model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+# Estimate the GEV parameters using MLE
+
+annual_max = maharashtra_max$annual_max
+model_1_mah = fevd(annual_max,maharashtra_max)
+
+#summary(model_1_mah)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+##model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ =0
+
+```{r, fig.width=8, fig.height=10}
+# Estimate the GEV parameters using MLE
+library(extRemes)
+annual_max = maharashtra_max$annual_max
+model_2_mah = fevd(annual_max,maharashtra_max, type = "Gumbel")
+
+model_2_mah$results$par
+summary(model_2_mah)
+```
+
+```{r}
+
+lr.test(model_1_mah,model_2_mah)
+
+```
+implies model 2 is better 
+
+
+
+## model 3
+
+```{r, fig.width=8, fig.height=10}
+
+
+year_covariate = maharashtra_max$year_transformed
+
+annual_max = maharashtra_max$annual_max
+model_3_mah = fevd(annual_max,maharashtra_max, type = "Gumbel", location = ~year_covariate)
+summary(model_3_mah)
+```
+
+
+```{r}
+
+lr.test(model_3_mah, model_2_mah)
+```
+
+implies that model 3 is better with year covarite.
+
+
+
+## model 4
+```{r}
+year_covariate = maharashtra_max$year_transformed
+
+annual_max = maharashtra_max$annual_max
+model_4_mah = fevd(annual_max,maharashtra_max, location = ~year_covariate + I(year_covariate^2), type = "Gumbel")
+```
+
+```{r}
+lr.test(model_3_mah, model_4_mah)
+```
+
+again we got that model 3 best describe the model in maharashtra
+
+
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5, 10, 50,100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3_mah, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Maharashtra",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+# Save the results to a CSV file
+write.csv(results_df, "return_level_results_maharashtra.csv", row.names = FALSE)
+
+
+
+
+```
+
+
+
+# 2. for kerela
+
+check python for stationarity test and man kendell test for kerela the man kendal test show that it has no trend and it is stationarity by adf test
+
+
+so we will be only fitting two model 
+
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Kerala", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Kerala", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+Hence simpler model is the sufficient to explain the pattern 
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+return_levels = return.level(model_2, return.period = c(5, 10,50,100), do.ci = TRUE )#, qcov = v)
+
+print(return_levels)
+```
+
+# 3. for Goa
+
+
+adf with BIC it is sationary 
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Goa", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Goa", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_1,model_2)
+```
+hence model 2would be sufficient we wont need aditional parameter
+
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Goa", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate,type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+lr.test(model_2,model_3)
+```
+Hence more complex model provide the better fit
+now model 3 is better as compared to model 2
+
+
+## model 4
+
+$\mu$ = a + b*year + c x year^2, $\sigma$ = constant, $\xi$ = 0
+
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Goa", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~year_covariate + I(year_covariate^2),type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_4,model_3)
+```
+hence model 3 is better 
+
+
+
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5, 10, 50,100)
+year_val <- c(125, 126,127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Goa",
+      Year = year+1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+
+
+# Print the results data frame
+print(results_df)
+
+# Save the results to a CSV file
+write.csv(results_df, "return_level_results.csv", row.names = FALSE)
+
+
+
+
+```
+
+
+
+
+
+
+
+# 4. for karnataka
+
+since it is only increasing in man kendel test we need to check on the variation with time in location parameter
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Karnataka", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Karnataka", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+ par( mfrow= c(3,2) )
+plot(model_2, type = "probprob", main = "Probability Plot"  )
+ plot(model_2, type = "qq", main = "Quantile Plot")
+#plot(model_1_guj, type = "qq2")
+ plot(model_2, type = "rl")
+ plot(model_2, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_1,model_2)
+```
+hence simpler model is sufficient that is model 2
+
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Karnataka", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate,type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_2)
+```
+
+hence model 3 is better
+
+## model 4
+
+$\mu$ = a + b*year + c x year^2, $\sigma$ = constant, $\xi$ = 0
+
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Karnataka", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~year_covariate + I(year_covariate^2),type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_4,model_3)
+
+```
+hence model 3 is sufficient 
+
+
+## return level table
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Karnataka",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+# Save the results to a CSV file
+write.csv(results_df, "return_level_results.csv", row.names = FALSE)
+
+
+
+
+```
+
+
+
+
+```{r, fig.width=10, fig.height=4}
+
+# Load required library
+library(extRemes)
+
+# Extract parameters from the fitted model
+a <- model_3$results$par[1]  # Intercept for mu
+b <- model_3$results$par[2]  # Slope for mu
+sigma <- model_3$results$par[3]  # Scale parameter (if log link is used)
+
+# Calculate fitted mu for each year
+years <- 1:123
+mu_vals <- a + b * years
+
+# Calculate standardized residuals
+standardized_residuals <- (annual_max - mu_vals) / sigma
+
+
+#png("residual_plot.png", width = 1000, height = 500) 
+# Step 3: Diagnostic Plots
+par(mfrow = c(1,3))
+# Plot 1: Residuals vs. Fitted Values
+#plot(mu_vals, standardized_residuals, xlab = "Fitted Values (mu)", ylab = "Standardized Residuals", main = "Residuals vs. Fitted")
+#abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+
+# Plot 3: Histogram of Standardized Residuals
+hist(standardized_residuals, breaks = 10, xlab = "Standardized Residuals", main = "Histogram of Standardized Residuals", probability = TRUE,col = "lightblue")
+curve(devd(x, type ="GEV"),add = TRUE,col = "red")
+# Add a legend
+legend("topright", 
+       legend = c("Standardized Residuals", "Standard Gumbel Distribution"), 
+       fill = c("lightblue", "red"), 
+       border = c("black", "red"), 
+       cex = 0.8)
+
+#Plot 4: Residuals vs. Time (Year)
+plot(years, standardized_residuals, xlab = "Year", ylab = "Standardized Residuals", main = "Residuals vs. Year")
+abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+#dev.off()
+```
+
+
+
+
+
+
+
+
+
+
+# 5. for tamil nadu
+
+here also increasing man kendal test and statinary time series hence will model it with time covariate
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Tamil Nadu", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Tamil Nadu", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_1,model_2)
+```
+
+model 2 is agian the sufficient model 
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Tamil Nadu", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate,type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_2)
+```
+
+hence model 2 is best model 
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+return_levels = return.level(model_2, return.period = c(5, 10, 50,100), do.ci = TRUE)#, qcov = v)
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+
+
+
+
+
+# 6. for Andhra pradesh 
+
+is show no trend in man kendel test and it is stationary 
+
+
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Andhra Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Andhra Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+mode 2 is the best model 
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+return_levels = return.level(model_2, return.period = c(5, 10,50,100), do.ci = TRUE)#, qcov = v)
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+
+
+
+
+# 7. for odisha
+
+man kendel test is increasing and it is stationary
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Odisha", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Odisha", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_1,model_2)
+```
+
+model 2 is sufficient 
+
+## model 3
+
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Odisha", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate,type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_2)
+```
+model 3 explains better 
+
+
+## model 4
+
+$\mu$ = a + b*year + c x year^2, $\sigma$ = constant, $\xi$ = 0
+
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Odisha", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~year_covariate + I(year_covariate^2),type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_4,model_3)
+```
+
+model 3 is better
+
+## return level table
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Odisha",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+# Save the results to a CSV file
+write.csv(results_df, "return_level_results.csv", row.names = FALSE)
+
+
+
+
+```
+
+```{r, fig.width=10, fig.height=4}
+
+# Load required library
+library(extRemes)
+
+# Extract parameters from the fitted model
+a <- model_3$results$par[1]  # Intercept for mu
+b <- model_3$results$par[2]  # Slope for mu
+sigma <- model_3$results$par[3]  # Scale parameter (if log link is used)
+
+# Calculate fitted mu for each year
+years <- 1:123
+mu_vals <- a + b * years
+
+# Calculate standardized residuals
+standardized_residuals <- (annual_max - mu_vals) / sigma
+
+
+#png("residual_plot.png", width = 1000, height = 500) 
+# Step 3: Diagnostic Plots
+par(mfrow = c(1,3))
+# Plot 1: Residuals vs. Fitted Values
+#plot(mu_vals, standardized_residuals, xlab = "Fitted Values (mu)", ylab = "Standardized Residuals", main = "Residuals vs. Fitted")
+#abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+
+# Plot 3: Histogram of Standardized Residuals
+hist(standardized_residuals, breaks = 10, xlab = "Standardized Residuals", main = "Histogram of Standardized Residuals", probability = TRUE,col = "lightblue")
+curve(devd(x, type ="GEV"),add = TRUE,col = "red")
+# Add a legend
+legend("topright", 
+       legend = c("Standardized Residuals", "Standard Gumbel Distribution"), 
+       fill = c("lightblue", "red"), 
+       border = c("black", "red"), 
+       cex = 0.8)
+
+#Plot 4: Residuals vs. Time (Year)
+plot(years, standardized_residuals, xlab = "Year", ylab = "Standardized Residuals", main = "Residuals vs. Year")
+abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+#dev.off()
+```
+
+
+# 8. for chhattisgarh
+
+here man kendel test is increasing and it is stationary
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Chhattisgarh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Chhattisgarh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+
+model 2 explains better 
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Chhattisgarh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate,type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_2)
+```
+model 3 is better 
+
+
+## model 4
+
+$\mu$ = a + b*year + c x year^2, $\sigma$ = constant, $\xi$ = 0
+
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Chhattisgarh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~year_covariate + I(year_covariate^2),type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_4,model_3)
+```
+
+hence model 3 is best
+
+## return level table
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5,10,50,100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Chhattisgarh",
+      Year = year+ 1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+# Save the results to a CSV file
+write.csv(results_df, "return_level_results.csv", row.names = FALSE)
+
+
+
+
+```
+
+```{r, fig.width=10, fig.height=4}
+
+# Load required library
+library(extRemes)
+
+# Extract parameters from the fitted model
+a <- model_3$results$par[1]  # Intercept for mu
+b <- model_3$results$par[2]  # Slope for mu
+sigma <- model_3$results$par[3]  # Scale parameter (if log link is used)
+
+# Calculate fitted mu for each year
+years <- 1:123
+mu_vals <- a + b * years
+
+# Calculate standardized residuals
+standardized_residuals <- (annual_max - mu_vals) / sigma
+
+
+#png("residual_plot.png", width = 1000, height = 500) 
+# Step 3: Diagnostic Plots
+par(mfrow = c(1,3))
+# Plot 1: Residuals vs. Fitted Values
+#plot(mu_vals, standardized_residuals, xlab = "Fitted Values (mu)", ylab = "Standardized Residuals", main = "Residuals vs. Fitted")
+#abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+
+# Plot 3: Histogram of Standardized Residuals
+hist(standardized_residuals, breaks = 10, xlab = "Standardized Residuals", main = "Histogram of Standardized Residuals", probability = TRUE,col = "lightblue")
+curve(devd(x, type ="GEV"),add = TRUE,col = "red")
+# Add a legend
+legend("topright", 
+       legend = c("Standardized Residuals", "Standard Gumbel Distribution"), 
+       fill = c("lightblue", "red"), 
+       border = c("black", "red"), 
+       cex = 0.8)
+
+#Plot 4: Residuals vs. Time (Year)
+plot(years, standardized_residuals, xlab = "Year", ylab = "Standardized Residuals", main = "Residuals vs. Year")
+abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+#dev.off()
+```
+
+# 9. for madhya pradesh
+
+
+again it is stationary with increasing man kendell test
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Madhya Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Madhya Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+model 1 is better explains the pattern 
+
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Madhya Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate)
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_1)
+```
+hence model 3 is better 
+
+## model 4
+
+$\mu$ = a + b*year + c x year^2, $\sigma$ = constant, $\xi$ = constant
+
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Madhya Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~year_covariate + I(year_covariate^2))
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_3,model_4)
+
+
+```
+
+
+hence model 3 is best (sufficient)
+
+## table for return level
+```{r}
+
+m = matrix(1,3,4)
+m[,2] = c(123, 125, 127)
+
+v = make.qcov(model_3,vals = m)
+
+#Calculate difference in return levels
+return_levels = return.level(model_3, return.period = 2, do.ci = TRUE, qcov = v)
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+
+```{r}
+# Load necessary libraries
+library(extRemes)
+
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 4)  # 4 columns for 4 parameters
+  m[, 2] <- years  # Set the second column to the years
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_3, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_3, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      State = "Madhya Pradesh",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+# Save the results to a CSV file
+write.csv(results_df, "return_level_results.csv", row.names = FALSE)
+
+```
+
+
+
+
+
+
+
+# 10. for Rajasthan
+
+man kendel test show that it is increasing and adf test tells that it is stationary 
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Rajasthan", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Rajasthan", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+
+model 2 is sufficient
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Rajasthan", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate,type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_2)
+```
+LRT suggest that model 3 is better 
+
+## model 4
+
+$\mu$ = a + b*year + c x year^2, $\sigma$ = constant, $\xi$ = 0
+
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Rajasthan", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~year_covariate + I(year_covariate^2),type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_4)
+```
+hence model 3 is sufficient 
+
+
+## return level table
+
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5,10,50,100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Rajasthan",
+      Year = year+1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+# Save the results to a CSV file
+write.csv(results_df, "return_level_results.csv", row.names = FALSE)
+
+
+
+
+```
+
+
+
+# 11. for punjab
+
+man kendel test say no trend and adf suggest that data is stationary 
+
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Punjab", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Punjab", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+
+model 1 is better in explain the data
+
+
+## table for return level
+```{r}
+
+# m = matrix(1,3,4)
+# m[,2] = c(123, 125, 127)
+# 
+# v = make.qcov(model_3,vals = m)
+
+#Calculate difference in return levels
+return_levels = return.level(model_1, return.period = c(5,10,50,100), do.ci = TRUE)#, qcov = v)
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+
+
+
+# 12. for himachal pradesh 
+
+man kendall test suggest increasing trend and adf test show, stationary series
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Himachal Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Himachal Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+lr.test(model_1, model_2)
+```
+hence simpler model is sufficient explain the variation 
+
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Himachal Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate,type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_2,model_3)
+```
+model 3 explain better 
+
+
+
+## model 4
+
+$\mu$ = a + b*year + c x year^2, $\sigma$ = constant, $\xi$ = 0
+
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Himachal Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~year_covariate + I(year_covariate^2),type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_4)
+```
+
+simpler model is sufficient,hence model 3
+
+
+## return level table
+
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5, 10,50,100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Himachal Pradesh",
+      Year = year+1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+# Save the results to a CSV file
+write.csv(results_df, "return_level_results.csv", row.names = FALSE)
+
+
+
+
+```
+
+
+# 13. for jammu khasmir
+
+it has no trend and it is stationary , so we donot need to add covariate even in location parameter  
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Jammu and Kashmir", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Jammu and Kashmir", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+
+```
+
+hence more complex model is better hence model 1
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+return_levels = return.level(model_1, return.period = c(5, 10,50,100), do.ci = TRUE)#, qcov = v)
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+# 14. for ladakh
+ it is increasing and stationary 
+ 
+ 
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Ladakh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Ladakh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+
+```
+
+ model 1 is better 
+ 
+ 
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Ladakh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate)
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+lr.test(model_1, model_3)
+```
+
+this tell us that the simpler model is sufficient that is model 1
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+return_levels = return.level(model_1, return.period = c(5,10,50,100), do.ci = TRUE)#, qcov = v)
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+
+# 15. for uttarakhand 
+
+no trend and it is stationary so donot need the time covariate in the location parameter
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Uttarakhand", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Uttarakhand", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+
+```
+
+simpler model is sufficient 
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+return_levels = return.level(model_2, return.period = c(5,10,50,100), do.ci = TRUE)#, qcov = v)
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+
+
+
+
+
+# 16. for chandigarh
+
+decreasing and stationary 
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Chandigarh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Chandigarh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+Stationary
+```{r}
+
+lr.test(model_2,model_1)
+
+```
+
+ simpler model is sufficient
+ 
+ 
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Chandigarh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+lr.test(model_2, model_3)
+```
+
+ hence the model 3 better explains
+ 
+## mode1_4
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Chandigarh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~ year_covariate + I(year_covariate^2), type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_4,model_3)
+```
+ model 3 is sufficient 
+ 
+ 
+## return level
+
+## return level table
+
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5, 10, 50,100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Chandigarh",
+      Year = year+1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+# Save the results to a CSV file
+write.csv(results_df, "return_level_results.csv", row.names = FALSE)
+
+
+
+
+```
+
+# 17. for haryana
+
+no trend and it is stationary
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Haryana", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Haryana", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+
+```
+
+
+simpler model is sufficient hence model 2
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+return_levels = return.level(model_2, return.period = c(5, 10,50, 100), do.ci = TRUE)#, qcov = v)
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+
+# 18. for delhi 
+
+no trend and staiontary 
+
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Delhi", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Delhi", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+
+```
+
+simpler model is sufficient hence model 2
+
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+return_levels = return.level(model_2, return.period = c(5,10,50,100), do.ci = TRUE)#, qcov = v)
+
+
+
+
+
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+# 19. for uttar pradesh
+increasing and stationary 
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Uttar Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Uttar Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+
+complex models is better, that is model 1
+
+
+ 
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Uttar Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate)
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_1,model_3)
+```
+
+simpler model is sufficient that is model 1
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+
+
+#return_levels = return.level(model_1, return.period = c(2, 3, 4, 5, 10, 20, 30, 50), do.ci = TRUE)#, qcov = v)
+
+
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- return.level(model_1, return.period = t, do.ci = TRUE)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Uttar Pradesh",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result[2],
+      Standard_Error = "",
+      CI_Lower = result[1],
+      CI_Upper = result[3]
+    ))
+  }
+}
+
+
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+# # Print the difference in return levels
+#print(results_df)
+```
+
+
+
+
+# 20. for bihar 
+
+increasing and stationary 
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Bihar", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Bihar", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+lr.test(model_2, model_1)
+```
+
+simpler model is sufficient (model 2)
+
+ 
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Bihar", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+#plot(model_3, type = "probprob", main = "Probability Plot"  )
+
+#plot(model_3, type = "qq2")
+#plot(model_3, type = "rl")
+#plot(model_3, type = "density", main = "Density plot", ylim = c(0,0.36))
+
+#Save plot as PNG
+png("bihar_rainfall_gumble_qq.png",
+    width = 1200,        # Width in pixels
+    height = 900,        # Height in pixels
+    res = 150,           # Resolution (150 dpi)
+    pointsize = 12)      # Base font size
+
+
+plot(model_3, type = "qq", main = "Qunatile plot")
+
+box()                   # Add bounding box
+
+# Close the graphics device
+dev.off()
+
+```
+
+```{r}
+lr.test(model_2, model_3)
+```
+model 3 better explain 
+
+
+
+## mode1_4
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Bihar", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~ year_covariate + I(year_covariate^2), type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_4,model_3)
+```
+
+
+model 3 is suff
+
+
+## return level table
+
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5,10,50,100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Bihar",
+      Year = year+1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+# 21. for jharkhand
+
+non stationary / stationary in bic and model 3 is sufficient  and increasing 
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Jharkhand", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Jharkhand", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+hence simpler model is sufficient, hence model 2
+
+
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Jharkhand", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_3)
+```
+hence model 3 is better 
+
+
+## model 4
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Jharkhand", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~ year_covariate  + I(year_covariate^2), type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_4)
+```
+
+
+simpler model is sufficient hence model 3
+
+
+## model 5
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Jharkhand", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_5 = fevd(annual_max,state_max,location.fun = ~ year_covariate,scale.fun = ~year_covariate, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+lr.test(model_5,model_3)
+```
+
+hence model 3 is sufficient
+
+
+
+## return level 
+
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5,10, 50,100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Jharkhand",
+      Year = year+1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+
+```
+
+
+
+
+
+# 22. for westbengal
+
+increasing and stationary 
+
+## model 1
+
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "West Bengal", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "West Bengal", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+ 
+ 
+```{r}
+lr.test(model_2, model_1)
+```
+
+model 1 explains better
+
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "West Bengal", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate)
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_1)
+```
+
+model 3 is better 
+
+## model 4
+
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "West Bengal", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~ year_covariate  + I(year_covariate^2))
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_4)
+```
+
+
+model 3 is sufficient
+
+
+## table for return level
+```{r}
+
+
+# year_val <- c(123, 125, 127)
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+m = matrix(1,3,4)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+m[,2] = c(123,125,127)
+
+v = make.qcov(model_3,vals = m)
+
+
+rp = c(2, 3, 4, 5, 10, 20, 30, 50)
+
+for (r in rp) {
+  return_levels = return.level(model_3,return.period = r,do.ci = TRUE,qcov= v)
+  cat("\n", "return period =", r , "\n")
+  print(return_levels)
+}
+
+ 
+```
+
+## table for return level
+
+
+```{r}
+# Load necessary libraries
+library(extRemes)
+
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 4)  # 4 columns for 4 parameters
+  m[, 2] <- years  # Set the second column to the years
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_3, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_3, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      State = "West Bengal",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+```
+
+
+
+
+# 23. for sikkim
+stationary and increasing
+
+## model 1 
+
+
+
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Sikkim", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Sikkim", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+hence model 2 is sufficient
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Sikkim", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate, type ="Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3, model_2)
+```
+
+## model 4
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Sikkim", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~ year_covariate  + I(year_covariate^2), type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_4,model_3)
+```
+
+hence simpler model (model 3 ) is sufficient 
+
+
+## return level table
+
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5,10,50,100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Sikkim",
+      Year = year+1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+
+
+```
+
+
+
+
+# 24. for arunachal pradesh 
+
+increasing and arunachal pradesh 
+## model 1 
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Arunachal Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Arunachal Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+
+
+simpler model is sufficient 
+
+hence model 2
+
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Arunachal Pradesh", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate, type ="Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_3,model_2)
+```
+
+model 2 is sufficient 
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+
+
+
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- return.level(model_2, return.period = t, do.ci = TRUE)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Arunachal Pradesh",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result[2],
+      Standard_Error = "",
+      CI_Lower = result[1],
+      CI_Upper = result[3]
+    ))
+  }
+}
+
+
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+
+
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+
+
+
+
+# 25. for assam
+ non-stationary/ stationary with bic selecting the simpler model and increasing 
+ 
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Assam", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Assam", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+
+model 1 is better 
+
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Assam", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate)
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_1)
+```
+
+
+
+hence model 3 is better 
+
+
+## model 4
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Assam", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~ year_covariate  + I(year_covariate^2))
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_4)
+```
+model 3 is sufficient
+
+
+```{r}
+# Load necessary libraries
+library(extRemes)
+
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 4)  # 4 columns for 4 parameters
+  m[, 2] <- years  # Set the second column to the years
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_3, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_3, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      State = "Assam",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+```
+
+
+
+
+# 26. for Meghalaya 
+
+
+non stationary with bic\item \textbf{Model 7:} \( \mu = a + b \times \text{year}, \sigma = \exp(a + b \times \text{year}), \xi = 0 \) and increasing 
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Meghalaya", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+par( mfrow= c(3,2) )
+plot(model_1, type = "probprob", main = "Probability Plot"  )
+plot(model_1, type = "qq", main = "Quantile Plot")
+ plot(model_1, type = "qq2")
+plot(model_1, type = "rl")
+ plot(model_1, type = "density", main = "Density plot")
+
+```
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Meghalaya", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+
+hence model 1 is better 
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Meghalaya", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate,scale.fun = ~year_covariate, use.phi = TRUE)
+
+#summary(model_2)
+
+ par( mfrow= c(3,2) )
+plot(model_3, type = "probprob", main = "Probability Plot"  )
+plot(model_3, type = "qq", main = "Quantile Plot")
+plot(model_3, type = "qq2")
+plot(model_3, type = "rl",rperiods = c(2,5,10,50,100))
+plot(model_3, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_3,model_1)
+```
+
+
+
+
+
+```{r, fig.width=10, fig.height=4}
+
+# Load required library
+library(extRemes)
+
+
+
+years <- 1:123
+mu_vals = model_3$results$par[1] + model_3$results$par[2]* years
+sigma_vals <- exp(model_3$results$par[3] +model_3$results$par[4]* years)
+sh = model_3$results$par[5]
+
+# Calculate standardized residuals
+standardized_residuals <- (annual_max - mu) / sigma_vals
+
+
+#png("residual_plot.png", width = 1000, height = 500) 
+# Step 3: Diagnostic Plots
+par(mfrow = c(1,3))
+# Plot 1: Residuals vs. Fitted Values
+#plot(mu_vals, standardized_residuals, xlab = "Fitted Values (mu)", ylab = "Standardized Residuals", main = "Residuals vs. Fitted")
+#abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+
+# Plot 3: Histogram of Standardized Residuals
+hist(standardized_residuals, breaks = 10, xlab = "Standardized Residuals", main = "Histogram of Standardized Residuals", probability = TRUE,col = "lightblue")
+curve(devd(x,shape = sh , type ="GEV"),add = TRUE,col = "red")
+# Add a legend
+legend("topright", 
+       legend = c("Standardized Residuals", "Standard Gumbel Distribution"), 
+       fill = c("lightblue", "red"), 
+       border = c("black", "red"), 
+       cex = 0.8)
+
+#Plot 4: Residuals vs. Time (Year)
+plot(years, standardized_residuals, xlab = "Year", ylab = "Standardized Residuals", main = "Residuals vs. Year")
+abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+#dev.off()
+```
+
+
+
+
+
+
+i am giving model 3 better as compare to others
+
+
+```{r}
+# Load necessary libraries
+library(extRemes)
+
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 5)  # 5 columns for 5 parameters
+  m[, 2] <- years  # Set the second column to the years
+  m[, 4] <- years
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_3, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_3, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      State = "Meghalaya",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+```
+
+
+
+# 27. for Nagaland
+
+no trend and stationary 
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Nagaland", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Nagaland", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+
+
+model 1 is better 
+
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Nagaland", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate)
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_1,model_3)
+```
+
+hence model 1 is sufficient ( there was no need to make model 3 i made it by mistake, but the result are consistent)
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+return_levels = return.level(model_1, return.period = c(50), do.ci = TRUE)#, qcov = v)
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+
+
+#return_levels = return.level(model_1, return.period = c(2, 3, 4, 5, 10, 20, 30, 50), do.ci = TRUE)#, qcov = v)
+
+
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- return.level(model_1, return.period = t, do.ci = TRUE)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Nagaland",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result[2],
+      Standard_Error = "",
+      CI_Lower = result[1],
+      CI_Upper = result[3]
+    ))
+  }
+}
+
+
+print(results_df)
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+# # Print the difference in return levels
+#print(results_df)
+```
+
+
+
+
+# 28. for Manipur
+
+increasing and stationary 
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Manipur", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Manipur", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+lr.test(model_2,model_1)
+```
+
+hence model 1
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Manipur", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate)
+
+#summary(model_2)
+
+par( mfrow= c(3,2) )
+plot(model_3, type = "probprob", main = "Probability Plot"  )
+plot(model_3, type = "qq", main = "Quantile Plot")
+ plot(model_3, type = "qq2")
+plot(model_3, type = "rl")
+plot(model_3, type = "density", main = "Density plot")
+
+```
+
+
+
+```{r}
+
+lr.test(model_3,model_1)
+```
+
+
+
+
+
+
+hence model 3
+
+
+
+## model 4
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Manipur", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~ year_covariate  + I(year_covariate^2))
+
+#summary(model_2)
+
+par( mfrow= c(3,2) )
+plot(model_4, type = "probprob", main = "Probability Plot"  )
+ plot(model_4, type = "qq", main = "Quantile Plot")
+ plot(model_4, type = "qq2")
+ plot(model_4, type = "rl")
+ plot(model_4, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_4,model_3)
+```
+
+hence model 4
+
+
+
+## table for return level
+```{r}
+
+
+# year_val <- c(123, 125, 127)
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+m = matrix(1,3,5)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+m[,2] = c(123,125,127)
+m[,3] = c(123,125,127)
+
+v = make.qcov(model_4,vals = m)
+
+
+rp = c(50)
+
+for (r in rp) {
+  return_levels = return.level(model_4,return.period = r,do.ci = TRUE,qcov= v)
+  cat("\n", "return period =", r , "\n")
+  print(return_levels)
+}
+
+ 
+```
+
+
+
+```{r}
+# Load necessary libraries
+library(extRemes)
+
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 5)  # 5 columns for 5 parameters
+  m[, 2] <- years  # Set the second column to the years
+  m[, 3] <- years
+  
+  
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_4, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_4, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      State = "Manipur",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+```
+
+
+
+
+
+
+
+# 29. for Tripura
+
+increasing and stationary 
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Tripura", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Tripura", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+hence model 1 is better 
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Tripura", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate)
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+lr.test(model_3,model_1)
+```
+hence model 3
+
+## model 4
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Tripura", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~ year_covariate  + I(year_covariate^2))
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_4,model_3)
+```
+
+hence model 3
+
+
+
+
+
+## table for return level
+```{r}
+
+
+# year_val <- c(123, 125, 127)
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+m = matrix(1,1,4)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+m[,2] = c(127)
+
+
+v = make.qcov(model_3,vals = m)
+
+
+rp = c(50)
+
+for (r in rp) {
+  return_levels = return.level(model_3,return.period = r,do.ci = TRUE,qcov= v)
+  cat("\n", "return period =", r , "\n")
+  print(return_levels)
+}
+
+
+
+ 
+```
+
+```{r}
+# Load necessary libraries
+library(extRemes)
+
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 4)  # 4 columns for 4 parameters
+  m[, 2] <- years  # Set the second column to the years
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_3, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_3, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      State = "Tripura",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 30. for Mizoram
+
+increassing and stationary 
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Mizoram", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Mizoram", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+
+hence model 1
+
+
+## model 3
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Mizoram", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate)
+
+#summary(model_2)
+
+par( mfrow= c(3,2) )
+plot(model_3, type = "probprob", main = "Probability Plot"  )
+ plot(model_3, type = "qq", main = "Quantile Plot")
+ plot(model_3, type = "qq2")
+ plot(model_3, type = "rl")
+ plot(model_3, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_1,model_3)
+```
+
+hence model 3
+
+## model 4
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Mizoram", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~ year_covariate  + I(year_covariate^2))
+
+#summary(model_2)
+
+par( mfrow= c(3,2) )
+ plot(model_4, type = "probprob", main = "Probability Plot"  )
+ plot(model_4, type = "qq", main = "Quantile Plot")
+ plot(model_4, type = "qq2")
+ plot(model_4, type = "rl")
+ plot(model_4, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_4,model_3)
+```
+hence model 4 is better 
+
+but  i am taking model 3 as the AIC BIC value diff is not significant
+
+
+
+
+
+
+
+## table for return level
+```{r}
+
+
+# year_val <- c(123, 125, 127)
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+m = matrix(1,3,4)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+m[,2] = c(123,125,127)
+
+v = make.qcov(model_3,vals = m)
+
+
+rp = c(2, 3, 4, 5, 10, 20, 30, 50)
+
+for (r in rp) {
+  return_levels = return.level(model_3,return.period = r,do.ci = TRUE,qcov= v)
+  cat("\n", "return period =", r , "\n")
+  print(return_levels)
+}
+
+ 
+```
+
+
+
+```{r}
+# Load necessary libraries
+library(extRemes)
+
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 4)  # 4 columns for 4 parameters
+  m[, 2] <- years  # Set the second column to the years
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_3, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_3, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      State = "Mizoram",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+
+```
+
+
+
+
+
+# 31. for Dadra and Nagar Haveli and Daman and Diu
+
+increasing and stationary 
+
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Dadra and Nagar Haveli and Daman and Diu", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Dadra and Nagar Haveli and Daman and Diu", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+
+
+model 2 is sufficient 
+
+## model 3
+
+
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Dadra and Nagar Haveli and Daman and Diu", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate,type = "Gumbel")
+
+#summary(model_2)
+
+par( mfrow= c(3,2) )
+plot(model_3, type = "probprob", main = "Probability Plot"  )
+plot(model_3, type = "qq", main = "Quantile Plot")
+plot(model_3, type = "qq2")
+plot(model_3, type = "rl")
+plot(model_3, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_3)
+```
+model 3 is better 
+
+
+
+## model 4
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Dadra and Nagar Haveli and Daman and Diu", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~ year_covariate  + I(year_covariate^2), type = "Gumbel")
+
+#summary(model_2)
+
+par( mfrow= c(3,2) )
+plot(model_4, type = "probprob", main = "Probability Plot"  )
+plot(model_4, type = "qq", main = "Quantile Plot")
+plot(model_4, type = "qq2")
+plot(model_4, type = "rl")
+ plot(model_4, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_4,model_3)
+```
+ model 3 is sufficient since there is very less different in the AIC and BIC values also p vlaue closed to the 0.05
+ 
+ 
+
+ 
+## return level table
+
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(-log(1 - p)) # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5,10,50,100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Dadra and Nagar Haveli and Daman and Diu",
+      Year = year+1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+
+
+
+```
+ 
+ 
+ 
+ 
+ 
+ 
+# 32. for Goa
+
+non stationary/ stationary with bic  and increasing 
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Goa", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Goa", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+
+simpler model is sufficient 
+hence model 2
+
+
+
+## model 3
+
+
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Goa", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max,location.fun = ~ year_covariate,type = "Gumbel")
+
+#summary(model_2)
+
+par( mfrow= c(3,2) )
+plot(model_3, type = "probprob", main = "Probability Plot"  )
+plot(model_3, type = "qq", main = "Quantile Plot")
+ plot(model_3, type = "qq2")
+plot(model_3, type = "rl")
+plot(model_3, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_3)
+```
+
+model 3 is better 
+
+
+
+
+```{r, fig.width=10, fig.height=4}
+
+# Load required library
+library(extRemes)
+
+# Extract parameters from the fitted model
+a <- model_3$results$par[1]  # Intercept for mu
+b <- model_3$results$par[2]  # Slope for mu
+sigma <- model_3$results$par[3]  # Scale parameter (if log link is used)
+
+# Calculate fitted mu for each year
+years <- 1:123
+mu_vals <- a + b * years
+
+# Calculate standardized residuals
+standardized_residuals <- (annual_max - mu_vals) / sigma
+
+
+#png("residual_plot.png", width = 1000, height = 500) 
+# Step 3: Diagnostic Plots
+par(mfrow = c(1,3))
+# Plot 1: Residuals vs. Fitted Values
+plot(mu_vals, standardized_residuals, xlab = "Fitted Values (mu)", ylab = "Standardized Residuals", main = "Residuals vs. Fitted")
+abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+
+# Plot 3: Histogram of Standardized Residuals
+hist(standardized_residuals, breaks = 10, xlab = "Standardized Residuals", main = "Histogram of Standardized Residuals", probability = TRUE,col = "lightblue")
+curve(devd(x, type ="GEV"),add = TRUE,col = "red")
+# Add a legend
+legend("topright", 
+       legend = c("Standardized Residuals", "Standard Gumbel Distribution"), 
+       fill = c("lightblue", "red"), 
+       border = c("black", "red"), 
+       cex = 0.8)
+
+#Plot 4: Residuals vs. Time (Year)
+plot(years, standardized_residuals, xlab = "Year", ylab = "Standardized Residuals", main = "Residuals vs. Year")
+abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+#dev.off()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## model 4
+
+$\mu$ = a + b*year, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Goa", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max,location.fun = ~ year_covariate  + I(year_covariate^2), type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_4,model_3)
+```
+
+simpler model is sufficient, hence model 3
+
+
+
+
+
+
+
+ 
+## return level table
+
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(-log(1 - p)) # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5,10,50,100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Goa",
+      Year = year+1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+
+
+
+```
+
+
+
+
+
+
+# 33. for puducherry
+
+no trend and stationary 
+
+
+ 
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Puducherry", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Puducherry", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+
+```
+
+simpler model is sufficient hence model 2
+
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+return_levels = return.level(model_2, return.period = c(50), do.ci = TRUE)#, qcov = v)
+
+# # Print the difference in return levels
+ print(return_levels)
+```
+
+
+## table for return level
+```{r}
+
+
+
+# # matrix all 1, 123 rows as the 123 maximum values are there and 4 column becuase there are 4 parameter
+# 
+# m = matrix(1,10,3)    #no of columns is number of parameter + 1(thersold) thersold would NA while                             #applying GEV  or we can skip thersold and direct write the number of parametes
+#                          #only
+# m[,2] = extreme_data$Year_transformed[1:10]
+# m[,4] = extreme_data$Year_transformed[1:10]
+# 
+# v = make.qcov(model_3,vals = m,nr= 10)
+
+#Calculate difference in return levels
+
+
+#return_levels = return.level(model_1, return.period = c(2, 3, 4, 5, 10, 20, 30, 50), do.ci = TRUE)#, qcov = v)
+
+
+T <- c(5, 10, 50, 100)
+year_val <- c(125, 126, 127,128)
+
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- return.level(model_2, return.period = t, do.ci = TRUE)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Puducherry",
+      Year = year + 1900,
+      Return_Period = t,
+      Return_Level = result[2],
+      Standard_Error = "",
+      CI_Lower = result[1],
+      CI_Upper = result[3]
+    ))
+  }
+}
+
+print(results_df)
+
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+
+```
+
+
+
+
+# 34. for Telangana
+
+stationary and increasing trend
+
+## model 1
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Telangana", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_1 = fevd(annual_max,state_max)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+## model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = 0
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Telangana", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+
+annual_max = state_max$annual_max
+model_2 = fevd(annual_max,state_max, type = "Gumbel")
+
+#summary(model_2)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+
+lr.test(model_2,model_1)
+
+```
+
+model 1 is better 
+
+
+## model 3
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Telangana", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+year_covariate = state_max$year_transformed
+
+annual_max = state_max$annual_max
+model_3 = fevd(annual_max,state_max, location.fun = ~year_covariate)
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+
+```{r}
+
+lr.test(model_3,model_1)
+```
+
+hence model 3 is better
+
+
+## model 4
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+state_max = extreme_data_by_state[extreme_data_by_state$state == "Telangana", ]
+state_max["year_transformed"] = state_max["year"] - 1900 # min of year +1 
+
+year_covariate = state_max$year_transformed
+annual_max = state_max$annual_max
+model_4 = fevd(annual_max,state_max, location.fun = ~year_covariate + I(year_covariate^2))
+
+#summary(model_1)
+
+# par( mfrow= c(3,2) )
+# plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+# plot(model_1_guj, type = "qq", main = "Quantile Plot")
+# plot(model_1_guj, type = "qq2")
+# plot(model_1_guj, type = "rl")
+# plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+
+```{r}
+
+lr.test(model_3,model_4)
+```
+
+
+hence model 3 is sufficient
+
+
+
+```{r}
+# Load necessary libraries
+library(extRemes)
+
+# Define return periods
+return_period_vals <- c(5,10,50,100)
+
+# Define years for which to calculate return levels
+years <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric(),
+  Standard_Error = numeric()
+)
+
+# Loop over return periods
+for (rp in return_period_vals) {
+  # Create a matrix for the quantile covariates
+  m <- matrix(1, nrow = length(years), ncol = 4)  # 4 columns for 4 parameters
+  m[, 2] <- years  # Set the second column to the years
+  
+  # Create the quantile covariates
+  v <- make.qcov(model_3, vals = m)
+  
+  # Calculate return levels with confidence intervals
+  return_levels <- return.level(model_3, return.period = rp, do.ci = TRUE, qcov = v)
+  
+  # Extract return levels and confidence intervals for each year
+  for (i in 1:length(years)) {
+    results_df <- rbind(results_df, data.frame(
+      State = "Telangana",
+      Year = years[i] + 1900,
+      Return_Period = rp,
+      Return_Level = return_levels[i, "Estimate"],
+      Standard_Error = return_levels[i, "Standard Error"],
+      CI_Lower = return_levels[i, "95% lower CI"],
+      CI_Upper = return_levels[i, "95% upper CI"]
+      
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+existing_data <- read.csv("return_level_results_all_the_states.csv")
+
+print(existing_data)
+updated_data = rbind(existing_data, results_df)
+print(updated_data)
+
+write.csv(updated_data, "return_level_results_all_the_states.csv", row.names= FALSE)
+
+```
