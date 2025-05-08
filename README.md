@@ -16,5 +16,6 @@ granularity, the study further explores spatial patterns either by zooming into 
 within the most vulnerable state (e.g., Meghalaya). These spatial extensions help identify
 high-risk zones and improve localized risk assessment.
 
+Dataset is not uploaded because of large size ( please vist https://www.imdpune.gov.in/cmpg/Griddata/Rainfall_25_NetCDF.html) for the data.
 
-This GitHub repository contains the Python and R scripts used for the analysis, the datasets, the estimated return levels in CSV format, and other miscellaneous files related to the study.
+This GitHub repository contains the Python and R scripts used for the analysis, the estimated return levels in CSV format, and other miscellaneous files related to the study.
