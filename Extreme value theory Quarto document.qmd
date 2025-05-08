@@ -1,0 +1,1016 @@
+---
+title: "Extreme Value Theory"
+author: "Annunay Pandey"
+format: 
+  html:
+    fig_caption: true
+    toc: true          # Enables the Table of Contents in HTML output
+    toc-depth: 3       # Sets the depth of headers to include in the TOC (2 for H2, 3 for H3)
+    toc-location: left # Sets TOC position to the left; you can use "right" if preferred
+    number-sections: true
+---
+
+# Introduction
+
+## Definitions of Extreme Values {#sec-def}
+
+In the context of extreme value theory, we can define extreme values in several ways:
+
+1.  **Classical definition:** An extreme value can be defined as the largest data point within a given dataset.
+
+2.  **Threshold definition:** Extreme values can also be identified as all data points that exceed a certain predefined threshold.
+
+3.  $\mathbf{r^{th}}$ **maxima definition**: Alternatively, extreme values can refer to the first few largest data points in the dataset, representing the most significant outliers. refer @fig-ext-plot
+
+```{python}
+#| echo: false
+#| label: fig-ext-plot
+#| fig-cap: "Visualization of the largest value in the datase "
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Generate some random data
+np.random.seed(0)
+data = np.random.normal(loc=50, scale=100, size=100)
+
+# Define thresholds and extremes
+threshold = 100
+top_n = 5
+
+# Sort data to identify extremes
+sorted_data = np.sort(data)
+largest_value = sorted_data[-1]  # The largest value
+threshold_extremes = sorted_data[sorted_data > threshold]  # Values exceeding the threshold
+top_n_extremes = sorted_data[-top_n:]  # Top N largest values
+
+# Create subplots
+fig, axs = plt.subplots(1, 3, figsize=(10, 6))
+
+# 1st Subplot: Largest Value
+axs[0].plot(sorted_data, color='lightblue', marker='o', label='Data Points', markersize=5)
+axs[0].plot(len(data) - 1, largest_value, 'ro', label='Largest Value')
+axs[0].set_title('Classical definition')
+axs[0].set_xlabel('Sorted Data Index')
+axs[0].set_ylabel('Data Value')
+axs[0].legend()
+axs[0].grid(True)
+
+# 2nd Subplot: Values Exceeding Threshold
+axs[1].plot(sorted_data, color='lightblue', marker='o', label='Data Points', markersize=5)
+for i in range(len(threshold_extremes)):
+    axs[1].plot(len(sorted_data) - len(threshold_extremes) + i, threshold_extremes[i], 'go', 
+                label='Exceeding Threshold' if i == 0 else "")
+axs[1].axhline(y=threshold, color='gray', linestyle='--', label='Threshold')
+axs[1].set_title('Values Exceeding Threshold')
+axs[1].set_xlabel('Sorted Data Index')
+axs[1].set_ylabel('Data Value')
+axs[1].legend()
+axs[1].grid(True)
+
+# 3rd Subplot: Top N Largest Values
+axs[2].plot(sorted_data, color='lightblue', marker='o', label='Data Points', markersize=5)
+for i in range(top_n):
+    axs[2].plot(len(data) - top_n + i, top_n_extremes[i], 'mo', 
+                label=f'Top {top_n} Largest' if i == 0 else "")
+axs[2].set_title(f'Top {top_n} Largest Values')
+axs[2].set_xlabel('Sorted Data Index')
+axs[2].set_ylabel('Data Value')
+axs[2].legend()
+axs[2].grid(True)
+
+# Show the plot
+plt.tight_layout()
+plt.show()
+
+```
+## Delta Method
+
+### Univariate case
+
+Let $\hat{\theta}$ be the estimator of some parameter $\theta$. Suppose we are interested in a function of $\hat{\theta}$, say $g(\hat{\theta})$.
+
+Using a first-order Taylor approximation of $g(\hat{\theta})$ around the true value $\theta$, we can write:
+
+$$
+g(\hat{\theta}) \approx g(\theta) + g'(\theta) (\hat{\theta} - \theta)
+$$
+
+Since $E(\hat{\theta}) \approx \theta$, we have:
+
+$$
+E(g(\hat{\theta})) \approx g(\theta)
+$$
+
+Now, for the variance, we approximate:
+
+$$
+\text{Var}(g(\hat{\theta})) \approx \text{Var}(g'(\theta) (\hat{\theta} - \theta))
+$$
+
+Using the fact that $\text{Var}(cX) = c^2 \text{Var}(X)$ for a constant $c$, we can simplify this to:
+
+$$
+\text{Var}(g(\hat{\theta})) \approx [g'(\theta)]^2 \text{Var}(\hat{\theta})
+$$
+
+Thus, the Delta Method gives us the variance of $g(\hat{\theta})$ as approximately:
+
+$$
+\text{Var}(g(\hat{\theta})) \approx [g'(\theta)]^2 \text{Var}(\hat{\theta})
+$$
+
+### Multivariate Case
+
+Let $\hat{\boldsymbol{\theta}}$ be an estimator of the vector of parameters $\boldsymbol{\theta} = (\theta_1, \theta_2, \dots, \theta_k)$, and suppose we are interested in a function of $\hat{\boldsymbol{\theta}}$, say $g(\hat{\boldsymbol{\theta}})$, where $g$ is a differentiable function of multiple variables.
+
+Using a first-order Taylor expansion of $g(\hat{\boldsymbol{\theta}})$ around the true value $\boldsymbol{\theta}$, we can write:
+
+$$
+g(\hat{\boldsymbol{\theta}}) \approx g(\boldsymbol{\theta}) + \nabla g(\boldsymbol{\theta})^T (\hat{\boldsymbol{\theta}} - \boldsymbol{\theta})
+$$
+
+Where $\nabla g(\boldsymbol{\theta})$ is the gradient (vector of partial derivatives) of $g$ with respect to $\boldsymbol{\theta}$:
+
+$$
+\nabla g(\boldsymbol{\theta}) = \left( \frac{\partial g}{\partial \theta_1}, \frac{\partial g}{\partial \theta_2}, \dots, \frac{\partial g}{\partial \theta_k} \right)
+$$
+
+For the expectation, we have:
+
+$$
+E(g(\hat{\boldsymbol{\theta}})) \approx g(\boldsymbol{\theta})
+$$
+
+Now, for the variance, we approximate:
+
+$$
+\text{Var}(g(\hat{\boldsymbol{\theta}})) \approx \nabla g(\boldsymbol{\theta})^T \cdot \text{Var}(\hat{\boldsymbol{\theta}}) \cdot \nabla g(\boldsymbol{\theta})
+$$
+
+Where $\text{Var}(\hat{\boldsymbol{\theta}})$ is the covariance matrix of the estimators $\hat{\boldsymbol{\theta}}$.
+
+
+
+## Fisher Information
+### Definition of Fisher Information
+
+The **Fisher Information** quantifies the amount of information an observable random variable provides about an unknown parameter in its distribution. This concept is fundamental to parameter estimation in statistics.
+
+Fisher Information, denoted as $\mathcal{I}(\theta)$, is defined as:
+
+$$
+\mathcal{I}(\theta) = \mathbb{E} \left[ \left( \frac{\partial}{\partial \theta} \log L(X; \theta) \right)^2 \right]
+$$
+
+or equivalently,
+
+$$
+\mathcal{I}(\theta) = - \mathbb{E} \left[ \frac{\partial^2}{\partial \theta^2} \log L(X; \theta) \right]
+$$
+
+where $L(X; \theta)$ is the likelihood function of the observed data $X$, given the parameter $\theta$.
+
+### Practical Interpretation
+
+- **Information about the parameter**: Fisher Information reflects the precision with which the data informs us about the parameter $\theta$. A higher Fisher Information indicates a greater potential for precise estimation of $\theta$.
+
+- **Estimator variance**: According to the **Cramér-Rao bound**, the variance of an unbiased estimator $\hat{\theta}$ is bounded by the inverse of Fisher Information:
+
+  $$
+  \text{Var}(\hat{\theta}) \geq \frac{1}{\mathcal{I}(\theta)}
+  $$
+
+  - **Efficiency of Estimators**: An estimator that achieves this lower bound is termed an efficient estimator, meaning no other unbiased estimator can provide a lower variance for the parameter.
+
+### Fisher Information in Numerical Optimization
+
+In practical applications, especially in large-sample estimation, the **Hessian matrix** of the log-likelihood function is often used as a substitute for the Fisher Information matrix. The Hessian serves as a computationally efficient proxy, as the observed curvature (second derivative) of the log-likelihood function approximates the expected curvature (Fisher Information) with sufficient accuracy for large datasets. Using the Hessian avoids the need to calculate expectations over all possible datasets, thus simplifying calculations.
+
+## Inference Using the Profile Likelihood Function
+
+
+The profile likelihood method provides a way to make accurate inferences about a particular component, $\theta_i$, of a parameter vector $\theta$. It is especially useful when we are interested in a specific parameter and want to account for the influence of the other parameters without estimating them directly.
+
+The profile log-likelihood for $\theta_i$ is defined as:
+
+$$
+l_p(\theta_i) = \max_{\theta_{-i}} l(\theta_i,\theta_{-i}),
+$$
+That is, for each value of $\theta_i$, the profile log-likelihood is maximized log-likelihood with respect to all other components of $\theta$.
+
+This can be generalizes to the situation where $\theta$ can be partitioned into two components,
+$(\theta^{(1)},\theta^{(2)})$, of where $\theta^{(1)}$ is the $k$-dimensional vector of interest and $\theta^{(2)}$ is the remainig $(d-k)$ components.Now profile log-likelihood for $\theta^{(1)}$ is now defined as\
+
+$$
+l_p(\theta^) = \max_{\theta_{-i}} l(\theta_i,\theta_{-i}),
+$$
+If $k$= 1 this reduces to the previous definition.
+
+::: {#thm-chisq}
+
+Let $x_1, \ldots, x_n$ be independent realizations from a distribution within a parametric family, and let $\hat{\theta}_0$ denote the maximum likelihood estimator of the $d$-dimensional model parameter $\theta_0 = (\theta^{(1)}, \theta^{(2)})$, where $\theta^{(1)}$ is a $k$-dimensional subset of $\theta_0$. Then for large $n$, we have
+
+$$
+D_p(\theta^{(1)}) = 2\{l(\hat{\theta}_0) - l_p(\theta^{(1)})\} \sim \chi_k^2,
+$$
+
+where $D_p(\theta^{(1)})$ follows a chi-square distribution with $k$ degrees of freedom.
+
+:::
+
+
+**Confidence Interval for a Single Parameter**:  
+   For a single component $\theta_i$ of the parameter vector $\theta$, a $(1 - \alpha)$ confidence interval can be constructed as:
+
+   $$
+   C_\alpha = \{\theta_i : D_p(\theta_i) \leq c_\alpha\}
+   $$
+
+   Here, $c_\alpha$ is the $(1 - \alpha)$ quantile of the $\chi^2_1$ distribution. This approach uses the profile likelihood ratio statistic $D_p(\theta_i)$ to provide a confidence interval that reflects the variability of $\theta_i$ while accounting for the influence of other parameters in the model.
+
+<!-- 2. **Confidence Region for Multiple Parameters**: -->
+<!--    When interested in a subset of parameters $\theta^{(1)} = (\theta_1, \ldots, \theta_k)$, the confidence region is constructed similarly: -->
+
+<!--    $$ -->
+<!--    C_\alpha = \{\theta^{(1)} : D_p(\theta^{(1)}) \leq c_\alpha\} -->
+<!--    $$ -->
+
+<!--    In this case, $c_\alpha$ is the $(1 - \alpha)$ quantile of the $\chi^2_k$ distribution, where $k$ is the dimension of $\theta^{(1)}$. -->
+
+## Model Checking
+The purpose of fitting a statistical model to data is to draw conclusions about the population from which the data were sampled. Such conclusions depend on the model’s accuracy, so it’s essential to check the model's fit. Since validating against additional data is often not feasible, we typically evaluate fit using the same data used to estimate the model.
+
+Suppose data $x_1,\ldots,x_n$ are independent realizations form a common population with unknown distribution function $F$. An estimate of $F$ , say $\hat F$, has been obtained, and we want to assess the plausibility that the $x_i$ are a random sample form $\hat F$. First, a model-free estimate of $F$ can be obtained empirically from the data. Let $x_{(1)}\leq x_{(2)} \leq \ldots\leq x_{(n)}$
+be the ordered sample. For any one of $x_{(i)}$, exactly $i$ of the $n$ observations have a value less than or equal to $x_{(i)}$, so an empirical estimate of the probability of an observation being less than or equal to $x_{(i)}$ is $\tilde F(x_{(i)}) = i/n$. To avoid having $\tilde F(x_{(n)} = 1$, slight adjustment is done to $\tilde F(x_{(i)}) = i/(n+1)$. This leads to following definition.
+
+
+::: {#def-emp-dritribution-function}
+
+Given an ordered sample of independent observations 
+$$x_{(1)}\leq x_{(2)} \leq \ldots\leq x_{(n)}$$
+form a population with distribution function F, the **empirical distribution function** is defined by 
+$$\tilde F(x) = \frac{i}{n+1} \ \ \ \text{for}\  \ x_{(i)} \leq x < x_{(i+1)}.$$
+:::
+
+$\tilde F(x)$ is an estimate of the true probability distribution $F$. Provided $\hat F$ is an adequate estimate of F. Various goodness-of-fit procedures are based on comparisons of $\tilde F$ and $\hat F$.
+
+::: {#def-probability-plot}
+
+Given an ordered sample of independent observations 
+$$x_{(1)}\leq x_{(2)} \leq \ldots \leq x_{(n)}$$
+from a population with estimated distribution function $\hat F$, a **probability plot** consists of points
+
+$$\left\{ \left( \hat{F}(x_{(i)}),\frac{i}{n+1}\right): i= 1,\ldots,n\right\}.$$
+:::
+
+
+If $\hat F$ is a reasonable model for the population distribution, the points of the probability plot should lie close to the unit diagonal. substantial departures from linearity provide evidence of a failure in $\hat F$ as model for the data.
+
+::: {#def-quantile-plot}
+
+Given an ordered sample of independent observations 
+$$x_{(1)}\leq x_{(2)} \leq \ldots \leq x_{(n)}$$
+from a population with estimated distribution function $\hat F$, a **quantile plot** consist of the points
+
+$$
+\left\{ \left( \hat{F}^{-1}\left(\frac{i}{n+1}\right), x_{(i)} \right) : i = 1, \ldots, n \right\}.
+$$
+
+:::
+
+The name "quantile plot" derives from the fact that the quantities $x_i$ and $\hat{F}^{-1}(i/(n+1))$ each provide estimates of the $i/(n+1)$ quantile of the distribution $F$. if $\hat F$ is a reasonable estimate of $F$, then the quantile plot should also consist of points close to the unit diagonal.
+
+The probability plot and the quantile plot contain the same information expressed on as different scale. However, the perception gained on different scales can be important, as reasonable fit on one scale may look poor on the other.
+
+
+
+# Classical Extreme Value Theory (Classical definition)
+
+Suppose $X_{1}, \ldots, X_{n}$ are independently and identically distributed (i.i.d.) random variables with a cumulative distribution function (CDF) denoted by $F(x)$.
+
+By definition, the extreme value $M_{n}$ is given by: $$M_{n} = \max(X_{1}, \ldots, X_{n})$$ This means that $M_{n}$ represents the largest value among the $n$ i.i.d. random variables.
+
+The CDF of $M_{n}$, denoted by $F_{M_{n}}(x)$, is the probability that the maximum value $M_{n}$ is less than or equal to some value $x$. Mathematically, this can be written as: $$
+F_{M_{n}}(x) = \mathbb{P}(M_{n} \leq x)
+$$
+
+$$
+F_{M_{n}}(x) = \mathbb{P}(X_{1} \leq x, \ldots, X_{n} \leq x)
+$$ Because the random variables $X_{1}, \ldots, X_{n}$ are independent, the joint probability can be expressed as the product of the individual probabilities: $$
+F_{M_{n}}(x) = \mathbb{P}(X_{1} \leq x) \times \mathbb{P}(X_{2} \leq x) \times \cdots \times \mathbb{P}(X_{n} \leq x)
+$$ Since each $X_{i}$ is identically distributed with CDF $F(x)$, we have: $$
+F_{M_{n}}(x) = [F(x)] \times [F(x)] \times \cdots \times [F(x)] = [F(x)]^n
+$$ When we are interested in the behavior of $M_n$ as $n$ tends to infinity,
+
+$$
+\lim_{n \to \infty} [F(x)]^n =
+\begin{cases} 
+      0 & \text{if } 0< F(x) < 1 \\
+      1 & \text{if } F(x) = 1 
+\end{cases}
+$$
+
+The limiting distribution $lim_{n \to \infty} [F(x)]^n$ is an example of a degenerate distribution. This type of distribution is not useful for modeling extreme values because it collapses to a binary outcome. It simply indicates that the maximum value will either exceed or not exceed a certain threshold, without offering insight into the range or likelihood of extreme events.
+
+Now, In the CLT, the normalization ensures that the distribution of the sum of random variables does not degenerate and instead converges to a meaningful, non-degenerate distribution (the normal distribution). Without this normalization, the distribution of the sum would become too spread out or too concentrated as $n$ increases.
+
+::: {#thm-extreme}
+If there exist sequences of constants $\{a_n > 0\}$ and $\{b_n\}$ such that $$
+P\left(\frac{M_n - b_n}{a_n} \leq z\right) \to G(z)
+$$ as $n \to \infty$, where $G$ is a non-degenerate distribution function, then $G$ belongs to one of the following families:
+
+$i.\ G(z) = \exp\left\{-\exp\left[-\left(\frac{z - b}{a}\right)\right]\right\}, \quad -\infty < z < \infty;$
+
+$ii.\ G(z) = \begin{cases} 0, & z \leq b, \\ \exp\left\{-\left(\frac{z - b}{a}\right)^{-\alpha}\right\}, & z > b, \end{cases}$
+
+$iii.\ G(z) = \begin{cases} \exp\left\{-\left[-\left(\frac{z-b}{a}\right)^\alpha\right]\right\}, & z \leq b, \\ 1, & z \geq b, \end{cases}$
+
+for parameters $a > 0$, $b$ , and, in the case of families ii and iii, $\alpha > 0$.
+:::
+
+::: {#thm-GEV}
+If there exist sequences of constants $a_n > 0$ and $b_n$ such that $$P\left(\frac{M_n - b_n}{a_n} \leq z\right) \to G(z)$$ as $n \to \infty$ for a non-degenerate distribution function $G$, then $G$ is a member of the GEV family:
+
+$$G(z) = \exp\left\{-\left[1+\xi\left(\frac{z-\mu}{\sigma}\right)\right]^{-\frac{1}{\xi}}\right\}, $$
+defined on $\{z: 1+ \xi(z-\mu)/\sigma > 0\},$ where $-\infty < \mu < \infty, \sigma > 0$ and $-\infty < \xi < \infty.$
+
+:::
+
+::: {#def-max}
+A distribution $G$ is said to be max-stable if, for every $n=2,3,
+\ldots, there are constants \alpha_n and \beta_n such that $$G^n(\alpha_n + \beta_n) = G(z)$$
+:::
+here $G^n$ is the distribution fucntion of $M_n = max\{X_1,\ldots,X_n\}$, where the $X_i$ are independent variables each having distribution fucntion $G$.
+
+::: {#thm-max-stable}
+A distribution is max_stable if, and only if, it is generalized extreme value distribution.
+
+:::
+
+
+The GEV have all three types of extrems values distribution as special case depending on the value of its shape parameter $\xi$.
+
+see @thm-extreme
+
+If $\xi$ = 0, it will follow $i$,know as Gumbell distribution.\
+If $\xi$ > 0, it wil  follow $ii$, know as Frechet distribution.\
+If $\xi$ < 0, it will follow $iii$, know as Wiebull distribution.
+
+Pdf of the GEV distribution\
+The probability density function (PDF) \( g(x) = \frac{dG(z)}{dx} \) for the Generalized Extreme Value (GEV) distribution is given by:
+
+$$
+g(x) = \frac{1}{\sigma} \left(1 + \xi \frac{x - \mu}{\sigma}\right)^{-\frac{1}{\xi} - 1} \exp \left(-\left(1 + \xi \frac{x - \mu}{\sigma}\right)^{-\frac{1}{\xi}}\right)
+$$
+
+where:
+$\mu$ is the location parameter,
+$\sigma > 0$ is the scale parameter, and
+$\xi$ is the shape parameter.
+
+This expression is valid when $1 + \xi \frac{x - \mu}{\sigma} > 0$, ensuring that the expression inside the power is positive.
+
+::: {#def-returnlevel}
+The return level $z_p$ is value such that probability of observing value greater than $z_p$ is p, In other words, $z_p$ is exceeded with probability p.
+:::
+
+::: {#def-returnperiod}
+The return period, $\frac{1}{p}$ is the average number of years between occurence of events that exceed the return level $z_p$.\ 
+
+For instance if p=0.01, the return period is 100 years, meaning on average, a value greater than $z_p$ is expected to occur are every 100 years.
+
+:::
+
+Now, for quantile function $P(z>z_p) = 1-P(z<z_p) = 1-G(z_p) = p \implies G(z_p) = 1-p$,\
+hence, $z_p = \mu + \frac{\sigma}{\xi} \left\{ \left[-\ln(1 - p)\right]^{-\xi} - 1 \right\}$
+
+## Estimation of GEV distribution 
+
+Suppose $z_1,\ldots,z_n$ are independent and identical data and follows $GEV(\mu,\sigma,\xi)$. The most popular method for estimation is the method of maximum likelihood.
+
+The likelihood function \( L(\mu, \sigma, \xi) \) is given by:
+
+$$
+L(\mu, \sigma, \xi) = \prod_{i=1}^n \left\{ \frac{1}{\sigma} \left(1 + \xi \frac{z_i - \mu}{\sigma}\right)^{-\frac{1}{\xi} - 1} \exp \left(-\left(1 + \xi \frac{z_i - \mu}{\sigma}\right)^{-\frac{1}{\xi}}\right) \right\}
+$$
+
+Simplifying, we can rewrite the likelihood as:
+
+$$
+= \frac{1}{\sigma^n} \left[\prod_{i=1}^n \left(1 + \xi \frac{z_i - \mu}{\sigma}\right)\right]^{-\frac{1}{\xi} - 1} \exp \left(-\sum_{i=1}^n \left(1 + \xi \frac{z_i - \mu}{\sigma}\right)^{-\frac{1}{\xi}}\right)
+$$
+
+Taking the logarithm of the likelihood function, we get the log-likelihood function \( \ln L(\mu, \sigma, \xi) \):
+
+$$
+\ln L(\mu, \sigma, \xi) = -n \ln(\sigma) - \left(\frac{1}{\xi} + 1\right) \sum_{i=1}^n \ln \left(1 + \xi \frac{z_i - \mu}{\sigma}\right) - \sum_{i=1}^n \left(1 + \xi \frac{z_i - \mu}{\sigma}\right)^{-\frac{1}{\xi}}
+$$
+
+where:
+$\mu$ is the location parameter,
+$\sigma > 0$ is the scale parameter, and
+$\xi$ is the shape parameter.
+
+To solve for the parameters $\mu$, $\sigma$, and $\xi$ that maximize the log-likelihood, we take partial derivatives with respect to each parameter and set them equal to zero:
+
+1. **Taking the partial derivative with respect to** $\mu$:
+
+   $$
+   \frac{\partial}{\partial \mu} \ln L(\mu, \sigma, \xi) = 0
+   $$
+
+2. **Taking the partial derivative with respect to** $\sigma$:
+
+   $$
+   \frac{\partial}{\partial \sigma} \ln L(\mu, \sigma, \xi) = 0
+   $$
+
+3. **Taking the partial derivative with respect to** $\xi$:
+
+   $$
+   \frac{\partial}{\partial \xi} \ln L(\mu, \sigma, \xi) = 0
+   $$
+
+These equations form a system of equations that can be solved to find the maximum likelihood estimates (MLEs) for $\mu$, $\sigma$, and $\xi$.
+
+### Challenges and Limitations
+
+1. **Dependence on Regularity Conditions**: MLE methods rely on certain regularity conditions to ensure desirable properties, such as **consistency** (the estimator converges to the true parameter values as the sample size increases) and **asymptotic normality** (the distribution of the estimator approximates normality for large samples). However, these conditions may not always hold, particularly for specific values of the shape parameter $\xi$.
+
+
+2. **Shape Parameter Constraints**: The performance of MLE depends on the value of the shape parameter $\xi$:
+   - For $\xi > -0.5$, MLE estimators are considered regular, meaning they retain the usual asymptotic properties, such as consistency and normality.
+   - For $-1 < \xi < -0.5$, MLE estimators may still be obtained but often lack regularity, leading to challenges in estimation and inference.
+   - For $\xi < -1$, it becomes increasingly difficult, and often impossible, to obtain reliable MLE estimators.
+
+3. **Practical Implications**: In most practical applications, it is common to observe $\xi > -0.5$, ensuring regularity of the MLE. However, if $\xi$ falls below this threshold, it may be necessary to consider alternative estimation methods, such as **moment-based estimators** or **Bayesian approaches**.
+
+## Asymptotic Models for Minima
+
+Some applications require models for extremely small, rather than extremely large, observations. This is not usually the case for problems involving environmental data, where we are often interested in extreme values like maximum rainfall, wind speeds, or temperature. However, modeling for extremely small values can be crucial in fields like finance, reliability engineering, and material science.
+
+For instance:\
+
+1. **Finance**: In risk management, we may focus on extremely small returns, which correspond to large losses, to better understand and mitigate potential risks.
+2. **Reliability Engineering**: Engineers may need to model the time to the first failure of a component, where shorter times are more critical.
+3. **Material Science**: Studying the minimum stress a material can withstand before failure provides insight into its durability.
+
+In these cases, we often use similar statistical techniques but with the focus on the lower tail of the distribution rather than the upper tail.
+
+
+To analyze the minimum value of a set of observations, let:
+
+$$
+\widetilde{M_n} = \min(X_1, X_2, \ldots, X_n)
+$$
+
+Define $Y_i = -X_i$ so that the minimum of $X_i$ values can be expressed as the negative of the maximum of $Y_i$ values. This gives us:
+
+$$
+\widetilde{M_n} = -\max(Y_1, Y_2, \ldots, Y_n) = -M_n
+$$
+
+where $M_n = \max(Y_1, Y_2, \ldots, Y_n)$.
+
+To find the distribution of $\widetilde{M_n}$, we proceed as follows:
+
+$$
+P(\widetilde{M_n} \leq z) = P(-M_n \leq z) = P(M_n \geq -z)
+$$
+
+This can be rewritten using the complementary probability as:
+
+$$
+= 1 - P(M_n \leq -z)
+$$
+
+Substituting the cumulative distribution function of $M_n$, we get:
+
+$$
+P(\widetilde{M_n} \leq z) = 1 - \exp\left( -\left[ 1 + \xi \left(\frac{-z - \mu}{\sigma}\right) \right]^{-\frac{1}{\xi}} \right)
+$$
+
+where $\mu$ is the location parameter, $\sigma > 0$ is the scale parameter, and $\xi$ is the shape parameter. This formulation allows us to model the distribution of the minimum of the original set of observations.
+
+## Inference on Return level
+
+The **return level** $z_p$ for a given probability $p$ is defined as:
+
+$$
+z_p = \begin{cases} 
+\mu + \frac{\sigma}{\xi} \left[ \left( -\log\left(1 - \frac{1}{p}\right) \right)^{-\xi} - 1 \right], & \text{for } \xi \neq 0 \\ 
+\mu - \sigma \log\left(1 - \frac{1}{p}\right), & \text{for } \xi = 0 
+\end{cases}
+$$
+
+Using the **Delta Method**, the approximate variance of $z_p$ is given by:
+
+$$
+\text{Var}(z_p) \approx \nabla z_p^T \, V \, \nabla z_p,
+$$
+
+where $V$ is the variance-covariance matrix of the estimated parameters $(\hat{\mu}, \hat{\sigma}, \hat{\xi})$, and 
+
+$$
+\nabla z_p = \begin{bmatrix} \frac{\partial z_p}{\partial \mu} & \frac{\partial z_p}{\partial \sigma} & \frac{\partial z_p}{\partial \xi} \end{bmatrix}.
+$$
+
+The components of $\nabla z_p$ are evaluated at the estimates $(\hat{\mu}, \hat{\sigma}, \hat{\xi})$. This gradient vector allows us to quantify the influence of each parameter on the variability of $z_p$, providing insight into the sensitivity of the return level estimate.
+
+## Profile likelihood
+
+To numerically evaluate the **profile likelihood** for any individual parameter $\xi$, $\mu$, or $\sigma$, the following approach can be used:
+
+1. **Fixing a Parameter**: For example, to obtain the profile likelihood for $\xi$, we fix $\xi = \xi_0$.
+   
+2. **Maximizing with Respect to Remaining Parameters**: With $\xi$ fixed, we maximize the log-likelihood function (denoted by equation (3.7)) with respect to the remaining parameters, $\mu$ and $\sigma$. 
+
+3. **Repeating Across Values**: This maximization is repeated for a range of values of $\xi_0$, resulting in a series of maximized log-likelihood values that form the **profile log-likelihood** for $\xi$.
+
+The maximized values from this process allow us to construct approximate confidence intervals for $\xi$ using @thm-chisq.
+
+### Extending Profile Likelihood to Combinations of Parameters
+
+This methodology is adaptable to cases where inference is required on a **combination of parameters**. For instance, to obtain confidence intervals for a specified **return level** $z_p$, a reparameterization of the GEV model is required, so that $z_p$ becomes one of the model parameters.
+
+### Reparameterizing for Return Level
+
+The GEV model can be reparameterized as follows:
+
+$$
+z_p = \mu + \frac{\sigma}{\xi} \left[ \left( -\log(1 - p) \right)^{-\xi} - 1 \right]
+$$
+
+By substituting $\mu$ in equation (3.7) with this expression for $z_p$, the model is now expressed in terms of the parameters $(z_p, \sigma, \xi)$. The **profile log-likelihood** for $z_p$ can then be obtained by maximizing with respect to the remaining parameters, $\sigma$ and $\xi$, in the usual way.
+
+## Model checking
+In the Introduction, we discussed the use of **probability plots** and quantile plots for model checking. Now, we describe two additional graphical goodness-of-fit checks.
+
+As noted in the Introduction, a probability plot compares the empirical and fitted distribution functions. With ordered block maxima data $z_{(1)},\ldots,z_{(m)}$, the empirical distribution function evaluated at $z_(i)$ is given by
+
+$$ \tilde G(z_{(i)}) = i/(m+1)$$
+
+By substituting parameter estimates into the GEV probability density function (pdf), we obtain the model-based distribution function as $$\hat G(z) = \exp\left\{-\left[1+\hat \xi\left(\frac{z_{(i)}-\hat \mu}{\hat \sigma}\right)\right]^{-\frac{1}{\hat \xi}}\right\}, $$
+
+where $\hat \xi$, $\hat \mu$ and $\hat \sigma$ are the estimated parameters of the GEV distribution.
+
+If the GEV model is correctly specified, the points $\left( \tilde G(z_{(i)}),\hat G(z_{(i)}) \right)$  for $i=1,\ldots,m$ should lie approximately on the unit diagonal. Substantial departures from this line suggest areas where the model does not fit the data well.
+
+However, a limitation of this plot for extreme value models is that both $\tilde G(z_{(i)})$ and $\hat G(z_{(i)})$ distribution functions approach 1 as $z_{(i)}$ increases. This is problematic because the probability plot becomes less informative for extreme values, which are often the focus in extreme value analysis. Therefore, the probability plot may not effectively reveal inaccuracies in the model’s performance for the most critical, high-end values of $z$.
+
+This deficiency is avoided by the **quantile plot**, consisting of the points 
+$$
+\left\{ \left( \hat{G}^{-1}\left(\frac{i}{m+1}\right), z_{(i)} \right) : i = 1, \ldots, n \right\}.
+$$
+where $$ \hat{G}^{-1}\left(\frac{i}{m+1}\right) = \hat \mu + \frac{\hat \sigma}{\hat \xi} \left[ \left( -\log\left(\frac{i}{m+1}\right) \right)^{-\xi} - 1 \right]$$
+
+is the inverse of the fitted model's cumulative distribution function. A well-fitting model should show these points lying close to a straight line. Departures from linearity in the quantile plot indicate that the model is failing to capture certain features of the data.
+
+**Return Level Plot**
+The return level plot is particularly useful for interpreting extreme value models, especially when dealing with long return periods.  This plot involves plotting the estimated return level $\hat z_p$ against the transformed value $y_p = -\text{log}(1-p)$ , where $p$ is the exceedance probability. The return level $z_p$ is defined as the value exceeded with probability $p$, and is calculated using the fitted GEV model.
+
+In a well-fitting model, the return level plot should be linear when the shape parameter $\hat \xi$ is zero. This linearity provides a baseline to judge the impact of the estimated shape parameter. The plot is particularly helpful for interpreting extreme tail behavior because it compresses the distribution tail, making return levels for extreme return periods more visible.
+
+**Probability Density Function Comparison**
+Another diagnostic tool is comparing the probability density function (pdf) of the fitted model with a histogram of the data. This method is less commonly used because histograms can vary significantly depending on the choice of bin widths. Since there is no unique empirical estimator for the density function (unlike the cumulative distribution function), comparing the model's pdf with the empirical histogram can be subjective and less informative. This method is generally considered a secondary diagnostic compared to the probability, quantile, and return level plots.
+
+## Example Impletation GEV
+
+In this section, we will analyze the Oxford dataset, which contains the annual maximum temperatures recorded in Oxford. The dataset is available through the evd package in R, which provides tools for extreme value analysis.
+
+### Finding MLE
+
+**Loading Dataset**
+Oxford dataset is a numeric vector containing annual maximum temperatures, in degrees Fahrenh
+eit, from 1901 to 1980 at Oxford, England.
+
+```{r}
+#install.packages("evd") # for install evd package
+
+# Load the "evd" package
+library(evd)
+
+# Load the oxford data
+data(oxford)
+
+# view the dataset
+head(oxford)
+
+#definig year as the data is numeric vector
+years = seq(1901,1980)
+
+# Plot the Oxford annual maximum temperatures
+plot(years,oxford, 
+     type = "o",          # 'o' for points connected by lines
+     col = "blue",        # Line color
+     pch = 16,            # Point character
+     xlab = "Year",       # X-axis label
+     ylab = "Temperature (°C)",  # Y-axis label
+     main = "Annual Maximum Temperatures at Oxford")  # Plot title
+
+
+```
+In this analysis, we will first manually calculate the Maximum Likelihood Estimates (MLE) for the parameters of the Generalized Extreme Value (GEV) distribution using Python. Following this, we will compare our estimates with those obtained using the built-in fgev() function from the evd package in R.
+
+To facilitate this comparison, we will export the relevant R object to a CSV file, which can then be imported into Python. This approach can also be accomplished using the reticulate library in newer versions of R.
+
+**Exporting Data from R**
+```{r}
+write.csv(data.frame(oxford), "oxford.csv", row.names = FALSE)
+```
+<!-- use getwd in R to get where the files are stores -->
+
+
+**Importing Data into Python**
+```{python}
+import pandas as pd
+
+# Read the CSV file
+df = pd.read_csv("oxford.csv")
+oxford_data = df['oxford'].tolist()
+import numpy as np
+oxford_data = np.array(oxford_data)
+```
+
+```{python}
+#| echo: false
+import warnings
+
+# Suppress specific warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+```
+
+**Defining GEV PDF and Log-Likelihood Function and Estimate Parameters Using MLE**\
+
+We will define the probability density function (PDF) for the GEV distribution, as well as the log-likelihood function that will be used to compute the MLE.
+
+```{python}
+import numpy as np
+import pandas as pd
+from scipy.optimize import minimize
+import matplotlib.pyplot as plt
+
+def gev_pdf(x, shape, loc, scale):
+    """Probability density function for the GEV distribution."""
+    # Calculate the standardized variable z
+    z = (x - loc) / scale
+    return (1 / scale) * (1 + shape * z) ** (-1/shape - 1) * np.exp(-(1 + shape * z) ** (-1/shape))
+
+
+# Log-likelihood function for GEV distribution
+def gev_log_likelihood(params, data):
+    shape, loc, scale = params  # here shape = ξ, loc = μ, and scale = σ
+
+    # Ensure valid parameters: scale > 0 and avoid invalid shape cases
+    if scale <= 0:
+        return np.inf
+    z = (data - loc) / scale
+    if np.any(1 + shape * z <= 0):
+        return np.inf
+
+    # Compute log-likelihood
+    log_lik = np.sum(np.log(gev_pdf(data, shape, loc, scale)))
+    return -log_lik  # We negate because we are using minimize
+
+# Initial guesses for the parameters
+initial_params = [0.1, np.mean(oxford_data), np.std(oxford_data)] 
+
+# Minimize the negative log-likelihood
+result = minimize(gev_log_likelihood, initial_params, args=(oxford_data,), method ='BFGS')
+
+# Extract MLE estimates
+shape_mle, loc_mle, scale_mle = result.x
+fisher_inv = result.hess_inv
+print("MLE for shape (xi):", shape_mle)
+print("MLE for location (mu):", loc_mle)
+print("MLE for scale (sigma):", scale_mle)
+print(fisher_inv)
+
+```
+
+```{python}
+#| echo: false
+warnings.resetwarnings()
+
+```
+
+**Estimating Parameters in R**
+
+Next, we will use the fgev() function from the evd package in R to perform MLE for the GEV parameters.
+
+```{r}
+# Estimate the GEV parameters using MLE
+gev_params = fgev(oxford)
+
+# Display the estimated parameters
+print(gev_params)
+
+
+```
+
+Upon comparing the MLE estimates obtained from both the Python implementation and the R fgev() function, we see consistent results.
+
+### Inference for Return level(using python)
+
+
+```{python}
+import numpy as np
+
+def calculate_return_level(μ, σ, ξ, p):
+    yp = -np.log(1 - p)
+    if ξ != 0:
+        zp = μ - (σ / ξ) * (1 - yp ** -ξ)
+    else:
+        zp = μ - σ * np.log(yp)
+    return zp
+
+def calculate_variance_zp(μ, σ, ξ, p, var_params):
+    yp = -np.log(1 - p)
+    # Gradient (partial derivatives of z_p with respect to parameters)
+    d_zp_d_μ = 1  # ∂z_p/∂μ
+    d_zp_d_σ = -(1/ξ) * (1 - yp ** -ξ) if ξ != 0 else -np.log(-np.log(1 - p))  # ∂z_p/∂σ
+    d_zp_d_ξ = (σ / ξ**2) * (1 - yp ** -ξ) - σ*ξ**-1 * yp**-ξ*np.log(yp) if ξ != 0 else 0  # ∂z_p/∂ξ
+
+    # Gradient vector
+    gradient = np.array([d_zp_d_μ, d_zp_d_σ, d_zp_d_ξ])
+
+    # Variance of z_p using the delta method
+    variance_zp = gradient @ var_params @ gradient.T
+    return variance_zp
+
+
+T = 100  # Example return period in years
+p = 1 / T  # Calculate p
+
+#parameter values are taken form values given by fgev() (R function)
+
+# Calculate the return level
+zp = calculate_return_level(loc_mle, scale_mle, shape_mle, p)
+
+# Calculate the variance of the return level
+variance_zp = calculate_variance_zp(loc_mle, scale_mle, shape_mle, p, fisher_inv)
+
+print(f"Return level z_p for return period {T} years: {zp:.4f}")
+print(f"Variance of return level z_p: {variance_zp:.4f}")
+
+
+```
+
+
+
+### Profile Likelihood
+For profile likelihood we have used profile function from evd library
+
+```{r}
+par(mfrow = c(1,3))
+profile_result = profile(gev_params,conf = 0.99)
+
+plot(profile_result, col= 'red')
+
+```
+
+The above profile log-likelihood plots for the location (loc), scale, and shape parameters, illustrating the variability and stability of the likelihood function across parameter estimates. The dashed line represents the threshold for confidence interval determination.
+
+
+```{r}
+#| echo: false
+par(mfrow = c(1,1))
+```
+
+### Model checking for GEV
+
+```{r}
+par(mfrow = c(2,2))
+plot(gev_params, col ='green')
+
+```
+
+```{r}
+#| echo: false
+par(mfrow = c(1,1))
+```
+
+This set of diagnostic plots helps assess the fit of the extreme value model to the data. The analysis is performed using the evd package, which generates these plots for model checking.
+
+Probability Plot (Top Left): This plot compares the empirical cumulative distribution function (ECDF) with the theoretical cumulative distribution function (CDF) derived from the fitted extreme value model. The empirical data is plotted as crosses, while the fitted model is shown as a smooth line. The dashed lines represent the 95% confidence interval for the fitted model, providing a visual indication of the uncertainty around the model fit.
+
+Quantile Plot (Top Right): In this plot, the empirical quantiles (represented by crosses) are compared to the quantiles estimated from the fitted model (represented by the smooth line). A close alignment of the points with the smooth line suggests that the model accurately captures the quantiles of the data. The dashed lines indicate the 95% confidence interval for the quantile estimates, showing the range within which the true quantiles are expected to lie.
+
+Density Plot (Bottom Left): This plot displays the empirical probability density function (PDF) of the data as a dashed line and the theoretical density of the fitted model as a smooth line. A good fit is indicated by the smooth line closely following the shape of the empirical density.
+
+Return Level Plot (Bottom Right):The return levels (extreme values corresponding to specified return periods) are plotted against the return periods. The crosses represent the empirical return levels, and the smooth line represents the return levels predicted by the fitted model. A good fit is indicated when the smooth line closely matches the empirical points. The dashed lines show the 95% confidence interval for the return level estimates, providing insight into the variability and reliability of the predicted return levels.
+
+
+
+
+## Model Generalization: the rth Largest order statistic model
+
+This aligns with the third definition of extreme values as outlined in [Definitions of Extreme Values @sec-def].
+
+One of the challenges in extreme value analysis is the limited availability of data for model estimation. By definition, extremes are rare, leading to high variance in model estimates, particularly for extreme return levels. In this section, we concentrate on a model designed for the r largest order statistics.
+
+As in previous sections, we consider $X_1,\ldots,X_n$ to be a sequence of independent and identically distributed random variables and aim to characterize their extremal behavior.we established that the limiting distribution of $M_n$, appropriately, converges to the Generalized Extreme Value (GEV) distribution as $n \to \infty$
+
+Here, we extend this result to other extreme order statistics by defining:
+$$M^{(k)} = \text{kth largest of .} \{X_1,\ldots,X_n\}$$
+and examining the limiting behavior of this variable for a fixed $k$ as $n \to \infty$
+
+
+::: {#thm-rth}
+If there exist sequences of constants $a_n > 0$ and $b_n$ such that $$P\left(\frac{M_n - b_n}{a_n} \leq z\right) \to G(z)$$ as $n \to \infty$ for a non-degenerate distribution function $G$, then $G$ is a member of the GEV family:
+
+$$G(z) = \exp\left\{-\left[1+\xi\left(\frac{z-\mu}{\sigma}\right)\right]^{-\frac{1}{\xi}}\right\}, $$
+
+then, for fixed $k$,
+
+$$P\left(\frac{M_n^{(k)} - b_n}{a_n} \leq z\right) \to G_k(z)$$
+
+defined on $\{z: 1+ \xi(z-\mu)/\sigma > 0\},$ where $-\infty < \mu < \infty, \sigma > 0$ and $-\infty < \xi < \infty.$
+
+where, $$G_k(z) = \exp\{ -\tau(z) \} \sum_{s=0}^{k-1} \frac{\tau(z)^s}{s!}$$ {#eq-rth}
+
+with $$\tau(z) = \left[1+\xi\left(\frac{z-\mu}{\sigma}\right)\right]^{-\frac{1}{\xi}}$$
+
+:::
+
+@thm-rth implies that, if the $k$th largest order statistic in a block is normalized in exactly the same way as the maximum,then its limiting distribution is of the form given by @eq-rth.
+
+However, a challenge arises in applying @eq-rth as a model, especially in cases like, where we often have the largest $r$ order statistics within several blocks, forming a complete vector.
+
+$$M_n^{(r)} = (M_n^{(1)},\ldots,M_n^{(r)})$$
+
+For each block (e.g., one year's observation), @thm-rth provides a family for the approximate distribution of each component of $M_n^{(r)}$, but it does not provide the joint distribution of $M_n^{(r)}$.
+
+
+Since the components are dependent (e.g $M_n^{(2)} < M_n^{(1)}$), their outcomes influence each other. Thus, @thm-rth alone cannot model $M_n^{(r)}$ .The following theorem, however, provides the joint density function for the limit distribution.
+
+
+:::{#thm-rth-gen}
+
+If there exist sequences of constants $a_n > 0$ and $b_n$ such that $$P\left(\frac{M_n - b_n}{a_n} \leq z\right) \to G(z)$$ as $n \to \infty$ for a non-degenerate distribution function $G$, then for fixed r, the limiting distribution as $n \to \infty$ of 
+
+
+$$P\left(\frac{M_n^{(1)} - b_n}{a_n} \leq z^{(1)},\ldots,\frac{M_n^{(r)} - b_n}{a_n} \leq z^{(r)}\right)$$
+
+falls within the family having joint probability density function 
+
+$$f(z^{(1)},\ldots,z^{(r)}) =  \exp\left\{ -\left[1+\xi\left(\frac{z^{(r)}-\mu}{\sigma}\right)\right]^{-\frac{1}{\xi}} \right\} \prod_{k=1}^{r} \sigma^{-1} \left[1+\xi\left(\frac{z^{(k)}-\mu}{\sigma}\right)\right]^{-\frac{1}{\xi}-1} $$ {#eq-joint}
+
+defined on $\{z^{(k)}: 1+ \xi(z^{(k)}-\mu)/\sigma > 0\},$ for $k=1,\ldots,r$\
+
+where $-\infty < \mu < \infty, \sigma > 0$ and $-\infty < \xi < \infty; z^{(r)} \leq \ldots,\leq z^{(1)}.$
+
+
+
+:::
+
+In the case $r= 1$, @eq-joint reduces to the GEV family of density functions. The case 
+
+
+
+
+## Example implementation usign GPD
+
+This analysis focuses on daily precipitation amounts (in inches) recorded at a single rain gauge in Fort Collins, Colorado, as described in Katz et al. (2002), Section 2.3.1. The primary objective is to examine extreme precipitation events using the framework of Extreme Value Theory (EVT), specifically through the Generalized Pareto Distribution (GPD).
+
+
+### Loading Data from extRemes(R package)
+
+```{r}
+
+library(extRemes) #another package of extreme value we have taken data from this
+
+# Load the Fort dataset
+data(Fort)
+
+# View the structure of the dataset
+str(Fort)
+
+# Summary of the dataset
+summary(Fort)
+
+plot(Fort[,"month"], Fort[,"Prec"], xlab="month", ylab="daily precipitation (inches)",col = 'blue')
+
+```
+
+```{r}
+write.csv(data.frame(Fort), "Fort.csv", row.names = FALSE)
+```
+
+
+
+```{python}
+import pandas as pd
+
+# Read the CSV file
+df = pd.read_csv("Fort.csv")
+print(df)
+Fort_data = df['Prec'].tolist()
+import numpy as np
+Fort_data = np.array(Fort_data)
+```
+
+Now let visually inspect about the probable thresold value
+
+```{r}
+plot(Fort[,"Prec"],col= 'red')
+
+```
+now let us do mean residue plot for finding a thersold
+
+
+<!-- ```{r} -->
+<!-- mrlplot(Fort[,'Prec'],nint = 100) -->
+
+<!-- ``` -->
+
+
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Simulated data (e.g., rainfall)
+np.random.seed(123)
+data = Fort_data
+
+# Sort the data
+data = np.sort(data)
+
+# Define candidate thresholds
+thresholds = np.linspace(0,3, 100)
+
+# Calculate Mean Residual Life
+mrl = []
+for u in thresholds:
+    exceedances = data[data > u] - u
+    if len(exceedances) > 0:
+        mrl.append(np.mean(exceedances))
+    else:
+        mrl.append(np.nan)
+
+# Plot MRL
+plt.figure(figsize=(8, 6))
+plt.plot(thresholds, mrl)
+plt.xlabel("Threshold (u)")
+plt.ylabel("Mean Residual Life (e(u))")
+plt.title("Mean Residual Life Plot")
+plt.grid()
+plt.show()
+
+
+```
+
+
+we see that plot is stablilizing (approximatly linear) for for threshold 2.5 , so we will select 2.5 as thresold but in practice it is recommeded to do the fitting of range of thresold values for finding a better estimates 
+
+
+
+
+This estimates are using evd package
+```{r}
+library(evd)
+
+gpd_params = fpot(Fort[,'Prec'],2.5,std.err= TRUE)
+
+gpd_params
+
+```
+
+<!-- Estimate using extRems packages -->
+
+<!-- ```{r} -->
+<!-- # Remove rows with NA values in the 'Prec' column -->
+<!-- Fort_clean = na.omit(Fort$Prec) -->
+<!-- gpd_params1 = fevd(Fort_clean,Fort,threshold = 2.5,type = 'GP') -->
+<!-- gpd_params1 -->
+
+<!-- ``` -->
+
+```{r}
+
+library(evd)
+par(mfrow = c(1,2))
+profile_result_gpd = profile(gpd_params,conf = 0.99)
+
+plot(profile_result_gpd,col = 'blue')
+
+```
+
+The above profile log-likelihood plots for the scale, and shape parameters, illustrating the variability and stability of the likelihood function across parameter estimates. The dashed line represents the threshold for confidence interval determination.
+
+```{r}
+#| echo: false
+par(mfrow = c(1,1))
+```
+
+### Model checking for GEV
+
+```{r}
+par(mfrow = c(2,2))
+plot(gpd_params,col = 'blue')
+
+```
+
