@@ -17,5 +17,4 @@ within the most vulnerable state (e.g., Meghalaya). These spatial extensions hel
 high-risk zones and improve localized risk assessment.
 
 
-This repo consist of the python files and R file where i have done the analysis also it conatians the return levels estimates in the CSV file.
-
+This GitHub repository contains the Python and R scripts used for the analysis, along with CSV files that provide the estimated return levels.
