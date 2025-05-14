@@ -1,0 +1,1201 @@
+---
+title: "Notes"
+author: "Annunay Pandey"
+affiliation: "Institute of chemical techonolgy"
+format: 
+  html:
+    fig_caption: true
+    toc: true          # Enables the Table of Contents in HTML output
+    toc-depth: 4       # Sets the depth of headers to include in the TOC (2 for H2, 3 for H3)
+    toc-location: left # Sets TOC position to the left; you can use "right" if preferred
+    number-sections: true
+---
+
+
+# Data
+
+The original data consists of daily rainfall records for India from 1901 to 2023. This data was sourced from the India Meteorological Department (IMD) and can be referenced in Pai et al. (2014).
+
+
+<!-- put the table with showing data -->
+The data is gridded, containing values for time, latitude, and longitude. We have downloaded the data in a NetCDF file format, and it is organized as multi-index data. 
+
+
+<!-- try to get the rain guage location for plotting -->
+
+<!-- some visulizaiton using nasa software in the report and presentation -->
+
+
+
+# Methodology
+
+## Overall India analysis 
+<!-- take python code for importing and  plotting from juypyter lab -->
+
+
+As per our problem statement, we started with an overall analysis by collecting the maximum rainfall for each year and plotting the data accordingly. We utilized the traditional approach known as the block maxima approach, where each block represents a year, and we take the maximum value from each block. Given our extensive data spanning 123 years, we have opted to skip alternative approaches for this overall analysis.
+
+
+let do the plot of the maximum values
+
+<-- it is done jupyter lab -->
+
+Below is the plot of annual maxima along with the trend line. After plotting, we performed the Mann-Kendall test to assess the trend, and the results indicate an increasing trend.
+
+Furthermore, we conducted the Augmented Dickey-Fuller (ADF) test to check for non-stationarity in the data. The ADF test assumes the null hypothesis that the data is non-stationary. The test yielded a p-value of 0.717, which means we do not reject the null hypothesis, confirming that the data is non-stationary.
+
+<-- add python code -->
+
+Next, we will proceed to build a model that best fits our data by estimating the parameters of the Generalized Extreme Value (GEV) distribution using Maximum Likelihood Estimation (MLE).
+
+First, we will fit the basic model. For this analysis, I am using the extRemes package (Gilleland and Katz 2016). Although I initially attempted to build the model without the package, it was quite time-consuming. Therefore, I decided to use the package to streamline the process.
+
+
+
+```{r}
+## data importing from python and then adjusting year w.r.t the starting year for numerical stability 
+
+
+library(extRemes)
+
+extreme_data = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/Extreme_data_for_overall_india.csv")
+
+
+extreme_data$Year_transformed = extreme_data$Year - min(extreme_data$Year) + 1
+
+```
+
+### Model 1
+
+
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+# Estimate the GEV parameters using MLE
+
+annual_max = extreme_data$Annual_Max
+model_1 = fevd(annual_max,extreme_data)
+
+summary(model_1)
+
+par( mfrow= c(3,2) )
+plot(model_1, type = "probprob", main = "Probability Plot"  )
+plot(model_1, type = "qq", main = "Quantile Plot")
+plot(model_1, type = "qq2")
+plot(model_1, type = "rl")
+plot(model_1, type = "density", main = "Density plot")
+
+
+```
+
+The figure in the top left corner is the probability plot. For a well-fitted GEV model, the points should align closely with the unit diagonal. Any significant deviations from linearity suggest potential issues with the model.
+
+A limitation of the probability plot for extreme value models is that both the empirical probability and the model probability, denoted as \( \tilde{G}(z_{(i)}) \) and \( \hat{G}(z_{(i)}) \) respectively, tend to approach 1 as \( z_{(i)} \) increases. Here, \( z_{(i)} \) represents the ordered block maxima data, and \( \tilde{G}(z_{(i)}) = \frac{i}{m+1} \), where \( m \) is the number of block maxima. This means the plot provides the least information in the region of greatest interest, i.e., the extreme values.
+
+This issue is addressed by the quantile plot, shown in the top right corner. Similar to the probability plot, the quantile plot can indicate model failure if the points deviate significantly from linearity.
+
+The middle left plot displays the quantiles from a sample drawn from the fitted GEV distribution against the empirical data quantiles, accompanied by 95% confidence bands.
+
+The middle right plot is the return level plot, which includes a 95% confidence interval. This plot is useful for assessing the model's performance in predicting extreme events.
+
+Finally, the bottom left plot shows the density plot, comparing the fitted GEV density with the empirical density of the data. This helps visualize how well the GEV model captures the overall distribution of the data.
+
+Now, we will construct another model where the shape parameter is fixed at 0. This model will be referred to as **Model 2**.
+
+### Model 2
+$\mu$ = constant, $\sigma$ = constant, $\xi$ =0
+
+```{r, fig.width=8, fig.height=10}
+# Estimate the GEV parameters using MLE
+library(extRemes)
+annual_max = extreme_data$Annual_Max
+model_2 = fevd(annual_max,extreme_data, type = "Gumbel")
+
+summary(model_2)
+
+par( mfrow= c(3,2) )
+plot(model_2, type = "probprob", main = "Probability Plot"  )
+plot(model_2, type = "qq", main = "Quantile Plot")
+plot(model_2, type = "qq2")
+plot(model_2, type = "rl")
+plot(model_2, type = "density", main = "Density plot")
+
+```
+
+```{r}
+
+# Extract parameters from the fitted model
+a = model_2$results$par[1]
+#b = model_2$results$par[2]
+sigma = model_2$results$par[2]
+
+# Calculate fitted mu for each year
+years = 1:123
+mu_vals = a 
+# Sort annual_max values
+sorted_annual_max = sort(annual_max)
+
+
+#
+# library(nortest)
+#
+# # Anderson-Darling test
+# ad_test_result <- ad.test(sorted_annual_max, function(x) pevd(x,
+#                                                               loc = mu_vals[which.min(abs(x - sorted_annual_max))],
+#                                                               scale = sigma,
+#                                                               shape = 0,
+#                                                               type = "Gumbel"))
+#
+# # Display Results
+# cat("AD Statistic:", ad_test_result$statistic, "\n")
+# cat("P-value:", ad_test_result$p.value, "\n")
+#
+# # Decision Rule
+# if (ad_test_result$p.value < 0.05) {
+#   cat("Conclusion: Reject H0 — Data does NOT follow the Gumbel distribution.\n")
+# } else {
+#   cat("Conclusion: Fail to reject H0 — Data may follow the Gumbel distribution.\n")
+# }
+
+
+function(x){
+  
+  
+}
+
+
+
+# Correct KS Test using Original Data Points
+ks_result <- ks.test(
+  sorted_annual_max,
+  function(x) pevd(x, loc = mu_vals,
+                   scale = sigma, shape = 0, type = "Gumbel")
+)
+
+# Display Results
+cat("KS Statistic (D):", ks_result$statistic, "\n")
+cat("P-value:", ks_result$p.value, "\n")
+
+# Compute Critical Value
+n = length(sorted_annual_max)
+D_critical = 1.36 / sqrt(n)
+
+# Decision Rule
+if (ks_result$statistic > D_critical) {
+  cat("Conclusion: Reject the null hypothesis — Data does NOT follow the Gumbel distribution.\n")
+} else {
+  cat("Conclusion: Fail to reject the null hypothesis — Data may follow the Gumbel distribution.\n")
+}
+
+
+
+```
+
+
+
+
+The **Likelihood Ratio Test (LRT)** is a statistical method used to compare the goodness of fit of two competing models, typically a **simpler (nested) model** (null model) and a **more complex (alternative) model**. The test evaluates whether the additional parameters in the more complex model significantly improve the fit to the data compared to the simpler model.
+
+
+### Theory of the Likelihood Ratio Test
+
+1. **Null and Alternative Hypotheses**:
+   - **Null Hypothesis ($H_0$)**: The simpler model (with fewer parameters) is sufficient to explain the data.
+   - **Alternative Hypothesis ($H_1$)**: The more complex model (with additional parameters) provides a significantly better fit to the data.
+
+2. **Likelihood Functions**:
+   - Let $\hat{L}_0$ be the **maximized likelihood** of the simpler model (null model).
+   - Let  $\hat{L}_1$ be the **maximized likelihood** of the more complex model (alternative model).
+
+3. **Test Statistic**:
+   The likelihood ratio test statistic ($\Lambda$) is calculated as:
+  $$\Lambda = -2 \ln\left(\frac{\hat{L}_0}{\hat{L}_1}\right) = 2 \left( \ln(\hat{L}_1) - \ln(\hat{L}_0) \right)$$
+   - Here,$\ln(\hat{L}_1)$ and $\ln(\hat{L}_0)$ are the log-likelihoods of the complex and simple models, respectively.
+   - The test statistic $\Lambda$ follows a **chi-squared distribution** ($\chi^2$) under the null hypothesis.
+
+4. **Degrees of Freedom**:
+   - The degrees of freedom ($df$) for the chi-squared distribution are equal to the difference in the number of parameters between the two models.
+
+5. **Decision Rule**:
+   - Compare the test statistic $\Lambda$ to the critical value from the chi-squared distribution with $df$ degrees of freedom at a chosen significance level (e.g., $\alpha = 0.05$).
+   - If $\Lambda > \chi^2_{\text{critical}}$, **reject the null hypothesis** and conclude that the more complex model provides a significantly better fit.
+   - If $\Lambda \leq \chi^2_{\text{critical}}$, **fail to reject the null hypothesis** and conclude that the simpler model is sufficient.
+
+The p-value provides a more precise measure of the evidence against the null hypothesis. It is the probability of observing a test statistic (ΛΛ) as extreme as, or more extreme than, the one calculated from your data, assuming the null hypothesis is true.
+
+1. **p-value Calculation**:
+   The p-value is calculated as:
+   $$
+   \text{p-value} = P(\chi^2_{df} \geq \Lambda)
+   $$
+   where:
+   - $\chi^2_{df}$ is the chi-squared distribution with $df$ degrees of freedom,
+   - $\Lambda$ is the observed test statistic.
+
+2. **Interpretation of the p-value**:
+   - If the p-value is **less than the significance level** (e.g., $\alpha = 0.05$), you **reject the null hypothesis**. This means the more complex model provides a statistically significant improvement in fit.
+   - If the p-value is **greater than the significance level**, you **fail to reject the null hypothesis**. This means the simpler model is sufficient, and the additional complexity is not justified.
+
+
+Although diagnostic plots can be used to assess the model, they are subject to human interpretation. Therefore, we will perform a likelihood ratio test to select the best model between Model 1 and Model 2. 
+
+Now, let's conduct the likelihood ratio test for Model 1 and Model 2.
+
+<!-- do it oncee before presentation by hand to remove any doubts -->
+
+```{r}
+
+lr.test(model_2,model_1)
+```
+Since the p-value is greater than the significance level, we fail to reject the null hypothesis, indicating that the Gumbel model is a better fit compared to the full GEV model.
+
+### Model 3
+
+$\mu$ = a + b*Year, $\sigma$ = constant, $\xi$ = 0
+
+```{r, fig.width=8, fig.height=10}
+
+
+annual_max = extreme_data$Annual_Max
+year_covariate = extreme_data$Year_transformed
+
+model_3= fevd(annual_max,extreme_data, location.fun = ~year_covariate, type= "Gumbel")
+
+summary(model_3)
+
+par( mfrow= c(3,2) )
+plot(model_3, type = "probprob", main = "Probability Plot"  )
+plot(model_3, type = "qq", main = "Quantile Plot")
+plot(model_3, type = "qq2")
+plot(model_3, type = "rl", rperiods = c(2,10,20,50,100,200))
+plot(model_3, type = "density", main = "Density plot")
+
+```
+
+In the return level plot 
+
+
+Now let us compare the model 2 and model 3 
+
+
+
+### return level
+
+```{r}
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(2, 3, 4, 5, 10, 20, 30, 50)
+year_val <- c(123, 125, 127)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      Year = year,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+# Save the results to a CSV file
+write.csv(results_df, "return_level_results_india.csv", row.names = FALSE)
+
+
+
+
+```
+
+
+
+
+```{r, fig.width=10, fig.height=5}
+
+# Load required library
+library(extRemes)
+
+# Extract parameters from the fitted model
+a <- model_3$results$par[1]  # Intercept for mu
+b <- model_3$results$par[2]  # Slope for mu
+sigma <- model_3$results$par[3]  # Scale parameter (if log link is used)
+
+# Calculate fitted mu for each year
+years <- 1:123
+mu_vals <- a + b * years
+
+# Calculate standardized residuals
+standardized_residuals <- (annual_max - mu_vals) / sigma
+
+
+png("residual_plot.png", width = 1000, height = 500) 
+# Step 3: Diagnostic Plots
+par(mfrow = c(1,2))
+# Plot 1: Residuals vs. Fitted Values
+#plot(mu_vals, standardized_residuals, xlab = "Fitted Values (mu)", ylab = "Standardized Residuals", main = "Residuals vs. Fitted")
+#abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+
+# Plot 3: Histogram of Standardized Residuals
+hist(standardized_residuals, breaks = 10, xlab = "Standardized Residuals", main = "Histogram of Standardized Residuals", probability = TRUE,col = "lightblue")
+curve(devd(x, type ="GEV"),add = TRUE,col = "red")
+# Add a legend
+legend("topright", 
+       legend = c("Standardized Residuals", "Standard Gumbel Distribution"), 
+       fill = c("lightblue", "red"), 
+       border = c("black", "red"), 
+       cex = 0.8)
+
+#Plot 4: Residuals vs. Time (Year)
+plot(years, standardized_residuals, xlab = "Year", ylab = "Standardized Residuals", main = "Residuals vs. Year")
+abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+dev.off()
+```
+
+```{r, fig.width=10, fig.height=4}
+
+# Load required library
+library(extRemes)
+
+# Extract parameters from the fitted model
+a <- model_1$results$par[1]  # Intercept for mu
+b <- model_1$results$par[2]  # Slope for mu
+sigma <- model_3$results$par[3]  # Scale parameter (if log link is used)
+
+# Calculate fitted mu for each year
+years <- 1:123
+mu_vals <- a
+
+# Calculate standardized residuals
+standardized_residuals <- (annual_max - mu_vals) / b
+
+
+#png("residual_plot.png", width = 1000, height = 500) 
+# Step 3: Diagnostic Plots
+par(mfrow = c(1,3))
+# Plot 1: Residuals vs. Fitted Values
+#plot(mu_vals, standardized_residuals, xlab = "Fitted Values (mu)", ylab = "Standardized Residuals", main = "Residuals vs. Fitted")
+#abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+
+# Plot 3: Histogram of Standardized Residuals
+hist(standardized_residuals, breaks = 10, xlab = "Standardized Residuals", main = "Histogram of Standardized Residuals", probability = TRUE,col = "lightblue")
+curve(devd(x, type ="GEV"),add = TRUE,col = "red")
+# Add a legend
+legend("topright", 
+       legend = c("Standardized Residuals", "Standard Gumbel Distribution"), 
+       fill = c("lightblue", "red"), 
+       border = c("black", "red"), 
+       cex = 0.8)
+
+#Plot 4: Residuals vs. Time (Year)
+plot(years, standardized_residuals, xlab = "Year", ylab = "Standardized Residuals", main = "Residuals vs. Year")
+abline(h = 0, col = "red")  # Add a horizontal line at 0
+
+#dev.off()
+```
+
+
+
+```{r}
+
+
+lr.test(model_2, model_3)
+
+```
+
+Above likelihood ratio test tell that model 3 is better as the p-value is less than level of significance, means we reject null hypotesis that is complex model better fit the model
+
+### Model 4
+
+```{r, fig.width=8, fig.height=10}
+
+
+annual_max = extreme_data$Annual_Max
+year_covariate = extreme_data$Year_transformed
+
+model_4= fevd(annual_max,extreme_data,type = "Gumbel", location.fun = ~year_covariate + I(year_covariate^2) )
+
+summary(model_4)
+
+par( mfrow= c(3,2) )
+plot(model_4, type = "probprob", main = "Probability Plot"  )
+plot(model_4, type = "qq", main = "Quantile Plot")
+plot(model_4, type = "qq2")
+plot(model_4, type = "rl",rperiods = c(2,10,20,50,100,200))
+plot(model_4, type = "density", main = "Density plot")
+
+```
+
+
+
+Now let us compare the model 3 and model 4
+
+```{r}
+lr.test(model_3, model_4)
+
+```
+
+Above likelihood ratio test tell that model 3 is better as the p-value is greater than level of significance, means we fail to reject null hypothesis that is simpler model is the better fit.
+
+
+## residual calculations for model 3
+```{r}
+# 
+# # Extract parameters from the fitted model
+# a = model_3$results$par[1]  
+# b = model_3$results$par[2]  
+# sigma = model_3$results$par[3]  
+# 
+# # Calculate fitted mu for each year
+# years = 1:123
+# mu_vals = a + b * years
+# 
+# # Sort annual_max values
+# sorted_annual_max = sort(annual_max)
+# 
+# 
+# # 
+# # library(nortest)
+# # 
+# # # Anderson-Darling test
+# # ad_test_result <- ad.test(sorted_annual_max, function(x) pevd(x, 
+# #                                                               loc = mu_vals[which.min(abs(x - sorted_annual_max))], 
+# #                                                               scale = sigma, 
+# #                                                               shape = 0, 
+# #                                                               type = "Gumbel"))
+# # 
+# # # Display Results
+# # cat("AD Statistic:", ad_test_result$statistic, "\n")
+# # cat("P-value:", ad_test_result$p.value, "\n")
+# # 
+# # # Decision Rule
+# # if (ad_test_result$p.value < 0.05) {
+# #   cat("Conclusion: Reject H0 — Data does NOT follow the Gumbel distribution.\n")
+# # } else {
+# #   cat("Conclusion: Fail to reject H0 — Data may follow the Gumbel distribution.\n")
+# # }
+# 
+# 
+# 
+# 
+# # Correct KS Test using Original Data Points
+# ks_result <- ks.test(
+#   sorted_annual_max,
+#   function(x) pevd(x, loc = mu_vals[which.min(abs(x - sorted_annual_max))],
+#                    scale = sigma, shape = 0, type = "Gumbel")
+# )
+# 
+# # Display Results
+# cat("KS Statistic (D):", ks_result$statistic, "\n")
+# cat("P-value:", ks_result$p.value, "\n")
+# 
+# # Compute Critical Value
+# n = length(sorted_annual_max)
+# D_critical = 1.36 / sqrt(n)
+# 
+# # Decision Rule
+# if (ks_result$statistic > D_critical) {
+#   cat("Conclusion: Reject the null hypothesis — Data does NOT follow the Gumbel distribution.\n")
+# } else {
+#   cat("Conclusion: Fail to reject the null hypothesis — Data may follow the Gumbel distribution.\n")
+# }
+
+
+
+```
+
+
+```{r}
+# # for model 3 mu = a + b year and sigma  = constant and xi = 0
+# 
+# # Extract parameters from the fitted model
+# a = model_3$results$par[1]  # Intercept for mu
+# b = model_3$results$par[2]  # Slope for mu
+# 
+# sigma = model_3$results$par[3]
+# 
+# 
+# # Calculate fitted mu for each year
+# years = 1:123
+# mu_vals = a + b * years
+# #sigma_vals= c + d * years
+# 
+# # Sort annual_max values
+# sorted_annual_max = sort(annual_max)
+# 
+# 
+# # Compute empirical CDF (ECDF)
+# empirical_values = numeric(length(sorted_annual_max))
+# for (i in 1:length(sorted_annual_max)) {
+#   empirical_values[i] = i / (length(sorted_annual_max) + 1)  # EDF formula
+# }
+# 
+# 
+# # Compute theoretical CDF values
+# theoretical_cdf_vals = numeric(length(sorted_annual_max))
+# 
+# resi = numeric(length(sorted_annual_max))
+# 
+# for (i in 1:length(sorted_annual_max)) {
+#   theoretical_cdf_vals[i] = pevd(sorted_annual_max[i], loc = mu_vals[i], scale = sigma, shape = 0, type = "Gumbel")
+#   resi[i] = -log(-log(theoretical_cdf_vals[i]))
+# }
+# 
+# #cat("p-value:", p_value, "\n")
+# 
+# # 
+# # for (i in years){
+# #   theoretical_cdf_vals[i] = pevd(annual_max[i],loc = mu_vals[i],scale = sigma,shape = 0, type = "Gumbel")
+# #   resi[i] = -log(-log(theoretical_cdf_vals[i]))
+# #   
+# # }
+# # 
+# # 
+# hist(resi, probability = TRUE, breaks = 10) #residual histogram
+# 
+# curve(devd(x,type = "GEV"), add =TRUE) # gumbel pdf
+# 
+# plot(mu_vals, resi)
+```
+
+
+
+
+
+
+
+
+
+```{r}
+
+# for model 3 mu = a + b year and sigma  = constant and xi = 0
+
+# Extract parameters from the fitted model
+a = model_3$results$par[1]  # Intercept for mu
+b = model_3$results$par[2]  # Slope for mu
+
+sigma = model_3$results$par[3]
+
+
+# Calculate fitted mu for each year
+years = 1:123
+mu_vals = a + b * years
+
+
+# Sort annual_max values
+sorted_annual_max = sort(annual_max)
+
+# Compute empirical CDF (ECDF)
+empirical_values = numeric(length(sorted_annual_max))
+for (i in 1:length(sorted_annual_max)) {
+  empirical_values[i] = i / (length(sorted_annual_max) + 1)  # EDF formula
+}
+
+theoretical_cdf_vals = numeric(length(sorted_annual_max))
+
+for (i in 1:length(sorted_annual_max)) {
+  theoretical_cdf_vals[i] = qevd(empirical_values[i], loc = mu_vals[i], scale = sigma, shape = 0, type = "Gumbel")
+  
+  
+}
+
+residual = sorted_annual_max - theoretical_cdf_vals
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Model 5
+
+
+```{r, fig.width=8, fig.height=10}
+
+
+annual_max = extreme_data$Annual_Max
+
+
+model_5= fevd(annual_max,extreme_data,type = "Gumbel", location.fun = ~extreme_data$Year_transformed, scale.fun = ~extreme_data$Year_transformed, use.phi = TRUE)
+
+summary(model_5)
+
+par( mfrow= c(3,2) )
+plot(model_5, type = "probprob", main = "Probability Plot"  )
+plot(model_5, type = "qq", main = "Quantile Plot")
+plot(model_5, type = "qq2")
+plot(model_5, type = "rl",rperiods = c(2,10,20,50,100,200))
+plot(model_5, type = "density", main = "Density plot")
+
+```
+
+Now let us compare the model 4 and model 5
+
+```{r}
+lr.test(model_3, model_5)
+
+```
+Above likelihood ratio test tell that model 5 isas the p-value is less than level of significance, means we reject null hypotesis that is complex model better fit the model.
+
+
+
+### Model 6
+
+
+```{r, fig.width=8, fig.height=10}
+
+
+annual_max = extreme_data$Annual_Max
+year_covariate = extreme_data$Year_transformed
+
+model_6= fevd(annual_max,extreme_data,type = "Gumbel", location.fun = ~year_covariate, scale.fun = ~year_covariate + I(year_covariate^2))
+
+summary(model_5)
+
+par( mfrow= c(3,2) )
+plot(model_6, type = "probprob", main = "Probability Plot"  )
+plot(model_6, type = "qq", main = "Quantile Plot")
+plot(model_6, type = "qq2")
+plot(model_6, type = "rl",rperiods = c(2,10,20,50,100,200))
+plot(model_6, type = "density", main = "Density plot")
+
+```
+
+
+
+Now let us compare the model 5 and model 6
+
+```{r}
+lr.test(model_5, model_6)
+
+```
+Above likelihood ratio test tell that model 5 is better as the p-value is greater than level of significance, means we fail to reject null hypothesis that is simpler model is the better fit.
+
+
+
+We are interested in a model that uses the minimum number of parameters while still providing a good explanation of the data. Although model 5 (with 4 parameters) is statistically more significant, the diagnostic plots indicate that model 3 (with 3 parameters) fits the data quite well. Also the AIC/BIC is better for model 5 but as compare to model 3 it only slighlty smaller. making model 3 the ideal choice.
+
+
+
+
+
+### Return level calculation 
+
+Let us create a return level table for Model 3. Since this model incorporates covariates, we need to compute return levels for each specific covariate value. For instance, for the year 2012, the 20-year return level is defined as the rainfall threshold that has a 5% chance of being exceeded in any given year. In other words, under the conditions specific to 2012—as captured by the model's covariates—there is a 1 in 20 probability of observing a rainfall event that meets or exceeds this threshold.
+
+For calculating return level we need variance covarince matrix which can be obtain by the inverse of the hessian matrix calculated during the optimization process.
+
+let us first calculate the variance covariance matrix 
+
+```{r}
+
+# as we have shape parameter zero in model 3
+
+
+var_cov_matrix = solve(model_3$results$hessian)
+
+year = 123
+
+mu = model_3$results$par[1] + (model_3$results$par[2]* year)
+
+T = 100
+
+p = 1- 1 /T
+zp = mu - model_3$results$par[3] * log(1-p)
+
+gradient_zp = matrix(nrow = 3,ncol=1)
+
+gradient_zp[1,1] = 1
+gradient_zp[2,1] = year
+gradient_zp[3,1] = -log(1-p)
+
+variance_zp = t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+sqrt(variance_zp)
+zp
+```
+
+```{r}
+
+
+
+
+#| echo:false
+
+T = 100
+p = 1 - 1/T 
+
+year  = 123
+
+mu = model_3$results$par[1] + model_3$results$par[2] * year
+
+return_level_extremes = qevd(p, loc= mu, scale = model_3$results$par[3],shape = 0, type = "Gumbel")
+
+return_level_extremes
+
+```
+
+### Creating confidence interval 
+
+Before moving to we will just see what is asymptotic normality of the MLE.
+
+
+**Asymptotic Normality of the Maximum Likelihood Estimator (MLE)** refers to a property of the MLE that describes its behavior as the sample size $n$ becomes large. It is a cornerstone of classical statistics and ensures that the MLE behaves predictably under certain regularity conditions. Here’s a detailed explanation:
+
+
+#### Key Idea:
+For a parametric model with a parameter $\theta$, the MLE $\hat{\theta}_n$ (based on $n$ observations) is said to be asymptotically normal if:
+
+$$
+\sqrt{n} (\hat{\theta}_n - \theta_0) \xrightarrow{d} \mathcal{N}(0, I(\theta_0)^{-1}),
+$$
+
+#### Intuition:
+- **Consistency**: As $n \to \infty$, $\hat{\theta}_n$ converges to the true parameter $\theta_0$ (under regularity conditions).
+
+- **Fluctuations Around $\theta_0$**: The deviations of $\hat{\theta}_n$ from $\theta_0$, scaled by $\sqrt{n}$, are approximately normally distributed for large $n$.
+
+
+- **Efficiency**: The asymptotic variance of $\hat{\theta}_n$, $I(\theta_0)^{-1}$, represents the Cramér-Rao lower bound, indicating that the MLE achieves the smallest possible variance among all unbiased estimators.
+
+Now, Generalized Extreme Value (GEV) distribution is not normal. However, for constructing confidence intervals for the return level, we often rely on asymptotic normality of the Maximum Likelihood Estimators (MLEs) of the GEV parameters. This allows us to use the delta method to approximate the variance of the return level and construct confidence intervals.
+
+another way is to do a profile likelihood of the return level, like we do for parameter, fixing the parameter over a certain range than maximize the log likelihood to get the profile likelihood, similarly we will do it for return level. This requires a reparametrization of the GEV model, so that return is on the model parameters.
+
+Here we are using the delata method to calculate the confidence interval.
+
+
+little explanation why we can do this, we know the MLEs are the asymptotic normal so,
+
+
+Using the **delta method**, which is based on a **first-order Taylor expansion**, we approximate the variance of $z_p$ as:
+
+$$
+Var(z_p) = \nabla z_p^T \cdot \Sigma \cdot \nabla z_p
+$$
+
+where:
+- $\nabla z_p$ is the **gradient vector** (partial derivatives of $z_p$ with respect to $\mu, \sigma, \xi$).
+- $\Sigma$ is the **covariance matrix** of the parameter estimates.
+
+By the **asymptotic normality of MLEs**, the return level also follows an **approximate normal distribution**:
+
+$$
+z_p \sim N(\hat{z}_p, \text{Var}(z_p))
+$$
+
+Thus, we can construct confidence intervals as:
+
+$$
+\hat{z}_p \pm z_{\alpha/2} \cdot SE(z_p)
+$$
+
+where $SE(z_p) = \sqrt{\text{Var}(z_p)}$.
+
+
+
+
+```{r}
+
+#creating the confidence interval 
+# we have variance of zp hence the standard error
+
+alpha = 0.05
+SE = sqrt(variance_zp)
+# Define z-score for 95% confidence interval
+z_alpha_2 <- qnorm(1 - alpha/2)  # 1.96 for 95% CI
+
+# Compute confidence intervals
+conf_interval <- c(return_level_extremes - z_alpha_2 * SE, 
+                   return_level_extremes + z_alpha_2 * SE)
+
+# Print confidence interval
+print(conf_interval)
+
+
+```
+
+
+Now we can use this for create a table this for different return level for different return period. (kept for later)
+
+```{r}
+
+t_vals = c(10,20,50,100)
+years_vals = c(100,120,150,160)
+
+#for 
+
+
+```
+
+
+## State Level analysis
+
+
+
+I have grided data, I have extracted the state level data from the grided data of whole india.I have used the geolocation api for the extracting the location form the grid points (lattitude and longitude). some the of the location in accurary was dealt manually, for example, i have used locationiq it was showing ladak region as pakistan, and since it was a 0.25 x 0.25 grid some of the points were not part of the india but has been consider because since it was closed it might contribute to the rainfall that region, these location points was not taken by me, it was already there in the IMD file i made a decsion to add this my analysis
+
+### Gujarat
+After performing a stationarity analysis, we found that the data for Gujarat is stationary, indicating no significant changes in statistical properties over time. However, the Mann-Kendall test detected an increasing trend. so might need to add the time dependent covaraite only to the location parameter
+
+```{r}
+library(extRemes)
+
+extreme_data_by_state = read.csv("C:/Users/annun/Documents/programes/python/Extreme value theroy/annual_max_rainfall_by_state.csv")
+
+
+extreme_data_by_state
+
+```
+
+
+#### Model 1
+
+```{r}
+
+
+# Filter the data for Gujarat using base R
+gujarat_max = extreme_data_by_state[extreme_data_by_state$state == "Gujarat", ]
+gujarat_max["year_transformed"] = gujarat_max["year"] - 1900 # min of year +1 
+# Display the filtered data
+print(gujarat_max)
+
+
+
+```
+
+Next, we will proceed to build a model that best fits our data by estimating the parameters of the Generalized Extreme Value (GEV) distribution using Maximum Likelihood Estimation (MLE).
+
+First, we will fit the basic model. For this analysis, I am using the extRemes package (Gilleland and Katz 2016).
+
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ = constant
+```{r, fig.width=8, fig.height=10}
+# Estimate the GEV parameters using MLE
+
+annual_max = gujarat_max$annual_max
+model_1_guj = fevd(annual_max,gujarat_max)
+
+summary(model_1_guj)
+
+par( mfrow= c(3,2) )
+plot(model_1_guj, type = "probprob", main = "Probability Plot"  )
+plot(model_1_guj, type = "qq", main = "Quantile Plot")
+plot(model_1_guj, type = "qq2")
+plot(model_1_guj, type = "rl")
+plot(model_1_guj, type = "density", main = "Density plot")
+
+```
+
+
+#### model 2
+
+$\mu$ = constant, $\sigma$ = constant, $\xi$ =0
+
+```{r, fig.width=8, fig.height=10}
+# Estimate the GEV parameters using MLE
+library(extRemes)
+annual_max = gujarat_max$annual_Max
+model_2_guj = fevd(annual_max,gujarat_max, type = "Gumbel")
+
+summary(model_2_guj)
+
+par( mfrow= c(3,2) )
+plot(model_2_guj, type = "probprob", main = "Probability Plot"  )
+plot(model_2_guj, type = "qq", main = "Quantile Plot")
+plot(model_2_guj, type = "qq2")
+plot(model_2_guj, type = "rl")
+plot(model_2_guj, type = "density", main = "Density plot")
+```
+```{r}
+lr.test(model_2_guj,model_1_guj)
+
+```
+
+
+#### model 3
+
+$\mu$ =  a = b * year, $\sigma$ = constant, $\shape$ = 0
+
+```{r, fig.width=8, fig.height=10}
+
+
+annual_max = gujarat_max$annual_Max
+
+year_covariate = gujarat_max$year_transformed
+
+model_3_guj= fevd(annual_max,gujarat_max, location.fun = ~year_covariate, type = "Gumbel")
+
+summary(model_3_guj)
+
+par( mfrow= c(3,2) )
+plot(model_3_guj, type = "probprob", main = "Probability Plot"  )
+plot(model_3_guj, type = "qq", main = "Quantile Plot")
+plot(model_3_guj, type = "qq2")
+plot(model_3_guj, type = "rl", rperiods = c(2,10,20,50,100,200))
+plot(model_3_guj, type = "density", main = "Density plot")
+
+```
+
+now since there we say the increasing trend the by man kendal test we will incorporate the year co varitate and compare it with using likelihood ratio test
+
+
+doing likelihood ratio test to check the which model is good model 2 or model 3
+
+```{r}
+
+lr.test(model_2_guj,model_3_guj)
+```
+
+Hence model 3 is better than the model 2, hence we conclude that for gujarat the model 3 is the best model(comparing with model4 yields the model 3 is still the sufficient model)
+
+Now we will the return level calcualtion for different values of return periods
+
+
+```{r}
+
+
+# Load necessary libraries
+library(evd)  # For qevd and other extreme value functions
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Example data
+year <- 130
+T <- 10
+
+# Call the function
+result <- calculate_return_level_gumbel(model_3_guj, year = year, T = T)
+
+
+result
+
+```
+
+```{r}
+
+
+# Define the function
+calculate_return_level_gumbel <- function(model, year, T, alpha = 0.05) {
+  # Extract parameters and Hessian matrix from the model
+  params <- model$results$par
+  var_cov_matrix <- solve(model$results$hessian)
+  
+  # Calculate mu (location parameter) based on the year
+  mu <- params[1] + params[2] * year
+  
+  # Calculate the return level (Gumbel case)
+  p <- 1 - 1 / T
+  return_level <- qevd(p, loc = mu, scale = params[3], shape = 0, type = "Gumbel")
+  
+  # Gradient of the return level with respect to the parameters (a, b, sigma)
+  gradient_zp <- matrix(nrow = 3, ncol = 1)
+  gradient_zp[1, 1] <- 1  # d(zp)/d(a)
+  gradient_zp[2, 1] <- year  # d(zp)/d(b)
+  gradient_zp[3, 1] <- -log(1 - p)  # d(zp)/d(sigma)
+  
+  # Calculate variance of the return level using the delta method
+  variance_zp <- t(gradient_zp) %*% var_cov_matrix %*% gradient_zp
+  SE <- sqrt(variance_zp)
+  
+  # Calculate confidence interval
+  z_alpha_2 <- qnorm(1 - alpha / 2)  # Z-score for the confidence level
+  conf_interval <- c(return_level - z_alpha_2 * SE, 
+                     return_level + z_alpha_2 * SE)
+  
+  # Return results
+  return(list(
+    return_level = return_level,
+    standard_error = SE,
+    confidence_interval = conf_interval
+  ))
+}
+
+# Example usage
+# Assuming `model_3_guj` is a fitted GEV model with parameters (a, b, sigma)
+# and the shape parameter (xi) is fixed at 0 (Gumbel case).
+
+# Define return periods and years
+T <- c(5,10,50,100)
+year_val <- c(125, 126, 127,128)
+
+# Initialize an empty data frame to store results
+results_df <- data.frame(
+  Year = integer(),
+  Return_Period = integer(),
+  Return_Level = numeric(),
+  Standard_Error = numeric(),
+  CI_Lower = numeric(),
+  CI_Upper = numeric()
+)
+
+# Loop over years and return periods
+for (year in year_val) {
+  for (t in T) {
+    # Calculate return level and confidence interval
+    result <- calculate_return_level_gumbel(model_3_guj, year = year, T = t)
+    
+    # Append results to the data frame
+    results_df <- rbind(results_df, data.frame(
+      State = "Gujarat",
+      Year = year+1900,
+      Return_Period = t,
+      Return_Level = result$return_level,
+      Standard_Error = result$standard_error,
+      CI_Lower = result$confidence_interval[1],
+      CI_Upper = result$confidence_interval[2]
+    ))
+  }
+}
+
+# Print the results data frame
+print(results_df)
+
+# Save the results to a CSV file
+write.csv(results_df, "return_level_results_gujarat.csv", row.names = FALSE)
+
+
+```
+
+
+#### model 4
+
+$\mu$ =  a = b * year, $\sigma$ = constant, $\shape$ = 0
+
+```{r, fig.width=8, fig.height=10}
+
+
+annual_max = gujarat_max$annual_Max
+
+year_covariate = gujarat_max$year_transformed
+
+model_4_guj= fevd(annual_max,gujarat_max, location.fun = ~year_covariate + I(year_covariate^2), type = "Gumbel")
+
+summary(model_3_guj)
+
+par( mfrow= c(3,2) )
+plot(model_4_guj, type = "probprob", main = "Probability Plot"  )
+plot(model_4_guj, type = "qq", main = "Quantile Plot")
+plot(model_4_guj, type = "qq2")
+plot(model_4_guj, type = "rl", rperiods = c(2,10,20,50,100,200))
+plot(model_4_guj, type = "density", main = "Density plot")
+
+```
+
+
+```{r}
+lr.test(model_3_guj,model_4_guj)
+```
